@@ -15,7 +15,7 @@ Desktop records → off-robot trains. Must match exactly.
 |---|---|
 | `observation.state` | shape **[8]** = 7 joint angles (rad) + 1 gripper width (m) |
 | `action` | shape **[8]** = 7 **commanded** joint positions `q_cmd` (rad; converter falls back to `backfilled_q_cmd`) + 1 gripper command (0=open,1=close) |
-| `observation.images.top` | **wrist** D405, serial `130322271109`, RGB 1280×720 @30fps |
+| `observation.images.top` | **wrist** D405, serial `130322270179`, RGB 1280×720 @30fps |
 | `observation.images.third_person_d405` | **external** D405, serial `130322273529`, RGB 1280×720 @30fps |
 | `task` | natural-language prompt string (VLAs are very phrasing-sensitive — keep it fixed per task) |
 | fps | 30 |
