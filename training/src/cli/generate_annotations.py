@@ -19,36 +19,36 @@ from src.data.utils import read_jsonl, save_annotation
 _DEFAULT_CLEANED_ROOT = Path(__file__).resolve().parents[2] / "cleaned_datasets"
 
 # (verb, preposition) pairs — only grammatically valid combinations are listed.
-# "Connect/Link X to Y", "Insert/Push/Slide X into Y", "Fit/Seat X in/into Y", etc.
+# EE26 Challenge 1 = peg-in-hole insertion with 3D-printed shapes.
+# "Insert/Push/Slide X into Y", "Fit/Seat X in/into Y", "Place/Lower X into Y", etc.
+# NOTE: refine _OBJECTS/_RECEPTACLES with the actual printed shape's colour/name once known.
 _VERB_PREP_PAIRS = [
     ("Insert", "into"),
     ("Insert", "in"),
-    ("Plug", "into"),
-    ("Plug", "in"),
-    ("Connect", "to"),
-    ("Link", "to"),
     ("Push", "into"),
     ("Slide", "into"),
     ("Fit", "into"),
     ("Fit", "in"),
     ("Seat", "in"),
-    ("Lock", "into"),
+    ("Place", "in"),
+    ("Place", "into"),
+    ("Lower", "into"),
 ]
 
 _OBJECTS = [
-    "the orange MSD plug",
-    "the orange connector",
-    "the orange plug",
-    "the MSD connector",
-    "the orange electrical connector",
+    "the peg",
+    "the printed peg",
+    "the cylinder",
+    "the block",
+    "the part",
 ]
 
 _RECEPTACLES = [
+    "the hole",
+    "the slot",
     "the socket",
-    "the MSD socket",
-    "the connector socket",
-    "the port",
-    "the housing",
+    "the opening",
+    "the matching hole",
 ]
 
 

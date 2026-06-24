@@ -14,14 +14,20 @@ Desktop records → off-robot trains. Must match exactly.
 | Field | Spec |
 |---|---|
 | `observation.state` | shape **[8]** = 7 joint angles (rad) + 1 gripper width (m) |
-| `action` | shape **[8]** = 7 joint positions (rad) + 1 gripper command (0=open,1=close) |
+| `action` | shape **[8]** = 7 **commanded** joint positions `q_cmd` (rad; converter falls back to `backfilled_q_cmd`) + 1 gripper command (0=open,1=close) |
 | `observation.images.top` | **wrist** D405, serial `128422271845`, RGB 1280×720 @30fps |
 | `observation.images.third_person_d405` | **external** D405, serial `128422271175`, RGB 1280×720 @30fps |
 | `task` | natural-language prompt string (VLAs are very phrasing-sensitive — keep it fixed per task) |
 | fps | 30 |
 
 Canonical camera→key mapping lives in `robot/franka_xr_teleop/configs/data_collection.yaml`.
-Image keys must be byte-identical between recording config and training config.
+Image keys must be byte-identical across recording, training, and deploy configs.
+
+**Producing the image keys (critical):** the converter maps `--primary-camera` → `observation.images.top`
+and every other camera → `observation.images.<camera_name>`. So convert with
+**`--primary-camera wrist_d405`** (camera_name from `data_collection.yaml`): wrist → `observation.images.top`,
+external `third_person_d405` → `observation.images.third_person_d405`. Wrong `--primary-camera` ⇒ silent
+key mismatch between training and deploy. Verified by `training/tests/test_data_converter_contract.py`.
 
 ## 2. Action wire — policy runner → bridge (UDP, port **28082**, JSON)
 ```json
