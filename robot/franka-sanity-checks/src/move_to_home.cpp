@@ -54,12 +54,22 @@ int main(int argc, char** argv) {
     std::cout << "Connected to robot at " << robot_ip
               << " (server v" << robot.serverVersion() << ")\n";
 
-    // Conservative collision behaviour: stop on unexpected contact.
+    // Match the production teleop bridge's safety envelope exactly
+    // (franka_controller.cpp ConfigureConservativeBehavior + robot.yaml load):
+    // collision thresholds (lower/upper, acceleration + nominal), joint impedance,
+    // and external load.
     robot.setCollisionBehavior(
-        {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},
-        {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},
-        {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}},
-        {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}});
+        {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},   // lower torque, accel
+        {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},   // upper torque, accel
+        {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},   // lower torque, nominal
+        {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},   // upper torque, nominal
+        {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}},         // lower force, accel
+        {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}},         // upper force, accel
+        {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}},         // lower force, nominal
+        {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}});        // upper force, nominal
+    robot.setJointImpedance({{1500.0, 1500.0, 1500.0, 1250.0, 1250.0, 1000.0, 1000.0}});
+    robot.setLoad(0.0, {{0.0, 0.0, 0.0}},
+                  {{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}});  // robot.yaml load
 
     const franka::RobotState initial = robot.readOnce();
     const std::array<double, 7> q_start = initial.q;
@@ -82,7 +92,9 @@ int main(int argc, char** argv) {
     // fine if slow. Sanity backstop only — a single joint's full range is ~2.9 rad,
     // and the goal is already clamped to joint limits above.
     constexpr double kMaxRehomeDelta = 3.0;   // rad
-    constexpr double kPeakSpeedCap = 0.4;     // rad/s (quintic peak = 1.875*delta/T)
+    // Match the bridge's rehome joint speed (franka_controller.cpp
+    // kRehomeJointSpeedRadPerS = 0.35). Quintic peak = 1.875*delta/T.
+    constexpr double kPeakSpeedCap = 0.35;    // rad/s
     if (max_delta > kMaxRehomeDelta) {
       std::cerr << "max_delta " << max_delta << " > " << kMaxRehomeDelta
                 << " rad — unexpectedly large, aborting for safety.\n";
@@ -109,7 +121,11 @@ int main(int argc, char** argv) {
         return franka::MotionFinished(out);
       }
       return out;
-    });
+    },
+    franka::ControllerMode::kJointImpedance,
+    /*limit_rate=*/true,        // robot.yaml limit_rate
+    /*cutoff_frequency=*/100.0  // robot.yaml lpf_cutoff_frequency
+    );
 
     const franka::RobotState final_state = robot.readOnce();
     std::cout << "q_final = [";
