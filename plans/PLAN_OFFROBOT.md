@@ -28,8 +28,8 @@ owner dirs; `CONTRACT.md` is frozen (ping the user before changing a contract va
 - [ ] Define the policy artifact + `policy_card.md` template per `CONTRACT.md §4`.
 
 ## O3 — OpenVINO + Pi0 (Intel bonus / ceiling)
-- [ ] Stand up `physical-ai-studio` (`pip install physicalai-train`) export path; write the export step (`backend="openvino"`).
-- [ ] Write the **Pantherlake inference runner**: loads OpenVINO export, emits UDP 28082 actions per `CONTRACT.md §2`. Test against a mock policy locally (no Intel HW needed to write it).
+- [x] Export path documented (`policy.export(..., backend="openvino")`, `InferenceModel.load`) — `src/inference/README.md`.
+- [x] **Pantherlake inference runner** `src/inference/openvino_runner.py`: emits UDP 28082 per `CONTRACT §2`, lazy HW deps, `--mock`/`--self-test`. Self-test + 5 unit tests green. **Verify obs/action shapes on the Intel box.**
 - [ ] Prepare LoRA Pi0 fine-tune config for when SmolVLA data quality is proven.
 
 ## O4 — C2 logic drafts (hand to Desktop)
