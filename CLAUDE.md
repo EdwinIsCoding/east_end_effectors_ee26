@@ -22,6 +22,32 @@ Work only in your owner dirs. If unsure which machine you're on: GPU + robot pre
 - ⚠️ **Desktop: `git pull` first** — a scaffold bug had dropped `training/src/data/` (the converter); it's
   recovered on `main`, the training pipeline is broken without it.
 
+## ⏳ Desktop D0 bring-up — IN PROGRESS (transient; delete this section when D0 is done)
+State as of 2026-06-24, mid-D0, **across a reboot for the GPU driver**. Full detail in memory `ee26-desktop-d0-env.md`.
+
+**libfranka — system 0.19.0 is WRONG (FR3-era).** The correct **0.9.2 is built at `~/opt/libfranka-0.9.2`** (system 0.19.0 left untouched). Build ALL `robot/` C++ with it:
+```bash
+export CMAKE_PREFIX_PATH="$HOME/opt/libfranka-0.9.2:$CMAKE_PREFIX_PATH"
+```
+⚠️ Confirm with Edwin the Panda firmware is really 4.2.x (not an FR3) before going live — 0.19.0's presence is suspicious.
+
+**Already done (survives reboot):** `franka-sanity-checks` built → `robot/franka-sanity-checks/build/panda_libfranka_sanity` (links 0.9.2; run once robot reachable).
+
+**Post-reboot, do first:**
+1. `nvidia-smi` should now list the RTX 5090. If the pre-reboot sudo script didn't run, run it now (also installs bridge deps):
+   ```bash
+   sudo apt-get update && sudo apt-get install -y nlohmann-json3-dev dkms nvidia-dkms-595-open
+   printf 'blacklist nouveau\noptions nouveau modeset=0\n' | sudo tee /etc/modprobe.d/blacklist-nouveau.conf
+   sudo update-initramfs -u && dkms status   # expect nvidia/595.71.05, 6.8.0-rt8-franka: installed → then sudo reboot
+   ```
+   Root cause was: `nvidia-dkms-595-open`+`dkms` were never installed and **nouveau** squatted the card. RT headers present, so it builds.
+2. With GPU up → **cu128** PyTorch venv + `torch.cuda.is_available()` + a GPU matmul (Blackwell sm_120).
+
+**Still blocked:**
+- **Bridge build:** needs `nlohmann-json3-dev` (in script above) + **XRoboToolkit PC Service SDK at `/opt/apps/roboticsservice`** (not on this box — external install; CMake hard-requires it even for `--dry-run`).
+- **Robot unreachable — NOT confirmed real.** No `192.168.2.x` route; `enp8s0f0/f1` DOWN; `192.168.2.200` = 100% loss. Fix cable/NIC + Desk FCI unlock, then re-ping (no motion until Edwin confirms).
+- **Cameras:** both D405 unplugged (no Intel-8086 USB); `pyrealsense2` not installed.
+
 ## Repo map
 | Path | What |
 |---|---|
