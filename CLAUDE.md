@@ -37,17 +37,23 @@ export CMAKE_PREFIX_PATH="$HOME/opt/libfranka-0.9.2:$CMAKE_PREFIX_PATH"
 - `franka-sanity-checks` built → `robot/franka-sanity-checks/build/panda_libfranka_sanity` (rpath-links 0.9.2; no LD_LIBRARY_PATH needed).
 - ✅ **Robot connection check PASS** — `--mode read-only` against `192.168.1.11`: 100-sample 1 kHz `read()` loop clean, `robot_mode: Idle`, no errors. RT comms + libfranka↔FCI verified. No motion run yet.
 
-**Post-reboot, still to do:**
-1. **GPU driver NOT up yet** (`nvidia-smi` fails; `dkms`/nvidia module never built; nouveau is blacklisted/not loaded). Run:
-   ```bash
-   sudo apt-get update && sudo apt-get install -y nlohmann-json3-dev dkms nvidia-dkms-595-open
-   sudo update-initramfs -u && dkms status   # expect nvidia/595.x, 6.8.0-rt8-franka: installed → then sudo reboot
-   ```
-   (`/etc/modprobe.d/blacklist-nouveau.conf` already in place — nouveau isn't loading.) Root cause: `nvidia-dkms-595-open`+`dkms` were never installed so no module built. RT headers present, so it builds.
-2. With GPU up → **cu128** PyTorch venv + `torch.cuda.is_available()` + a GPU matmul (Blackwell sm_120).
+**🖥️ GPU ↔ RT-kernel conflict — RESOLVED as DUAL-BOOT (Edwin-decided 2026-06-24):**
+NVIDIA 595 open **refuses to build on the RT kernel** (`preempt_rt_sanity_check` bails: "does not support real-time kernels"). So **do NOT install/keep `nvidia-dkms-595-open`** — its post-install fails on `6.8.0-rt8-franka`. Instead:
+- **GPU / training:** boot **`6.8.0-124-generic`** (prebuilt 595-open modules already at `/lib/modules/6.8.0-124-generic/kernel/nvidia-595-open/*.ko`; `nvidia-smi` works there with no build).
+- **Robot / teleop / data collection:** boot **`6.8.0-rt8-franka`** (current default; 1 kHz loop needs RT). No GPU here.
+- **D3 deploy (GPU+robot at once):** run inference via **OpenVINO on Pantherlake** → UDP 28082 to the bridge, so the RT desktop needs no GPU. (Only if Torch-on-desktop deploy is required would we patch NVIDIA onto RT — unsupported.)
+- Cleared the failed dkms state: `sudo apt-get remove -y nvidia-dkms-595-open`. `nlohmann-json3-dev` is installed.
+
+**cu128 validation (run after booting into `6.8.0-124-generic`):**
+```bash
+nvidia-smi                                   # should list the RTX 5090
+python3 -m venv ~/ee26_gpu_venv && source ~/ee26_gpu_venv/bin/activate
+pip install --index-url https://download.pytorch.org/whl/cu128 torch
+python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0)); x=torch.randn(4096,4096,device='cuda'); print((x@x).sum().item())"
+```
 
 **Still blocked (external):**
-- **Bridge build:** needs `nlohmann-json3-dev` (in script above) + **XRoboToolkit PC Service SDK at `/opt/apps/roboticsservice`** (not on this box — external install; CMake hard-requires it even for `--dry-run`).
+- **Bridge build:** `nlohmann-json3-dev` ✅ installed. Still needs **XRoboToolkit PC Service SDK** (Edwin has source/link). CMake wants `SDK/include/PXREARobotSDK.h` + `SDK/linux/64/libPXREARobotSDK.so`; point it via `-DXROBOTICS_SERVICE_ROOT=<path>`.
 - **Cameras:** both D405 unplugged (no Intel-8086 USB); `pyrealsense2` not installed.
 
 ## Repo map
