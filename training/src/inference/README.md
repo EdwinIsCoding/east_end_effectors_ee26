@@ -25,12 +25,14 @@ policy.export("./exports/c1_smolvla_ov", backend="openvino")
 python -m src.inference.openvino_runner --self-test
 
 # loop with mock policy + synthetic cameras (validates UDP path to a bridge):
-python -m src.inference.openvino_runner --mock --bridge-ip 192.168.2.200 --max-steps 100
+python -m src.inference.openvino_runner --mock --bridge-ip <black-workstation-ip> --max-steps 100
 
 # real deploy on Pantherlake:
 python -m src.inference.openvino_runner --model ./exports/c1_smolvla_ov \
-    --bridge-ip 192.168.2.200 --device GPU --prompt "Insert the peg into the hole." --rate 30
+    --bridge-ip <black-workstation-ip> --device GPU --prompt "Insert the peg into the hole." --rate 30
 ```
+> `--bridge-ip` is the **Black workstation** running the bridge (reachable from Pantherlake) — **not** the
+> robot FCI IP (`192.168.1.11`). The robot only talks to the bridge over libfranka; the runner talks to the bridge over UDP.
 
 ## Verify on the Intel box (assumptions to confirm — docs don't pin these)
 - `InferenceModel.select_action(obs)` accepts the LeRobot-style dict we build:

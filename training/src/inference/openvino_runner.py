@@ -21,7 +21,7 @@ Usage
 
     # real deploy on Pantherlake:
     python -m src.inference.openvino_runner --model ./exports/c1_smolvla_ov \
-        --bridge-ip 192.168.2.200 --prompt "Insert the peg into the hole." --device GPU
+        --bridge-ip <black-workstation-ip> --prompt "Insert the peg into the hole." --device GPU
 """
 from __future__ import annotations
 
@@ -275,7 +275,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--model", type=str, default=None, help="Path to the OpenVINO export dir.")
     p.add_argument("--device", type=str, default="GPU", help="OpenVINO device (GPU=Pantherlake iGPU, CPU, NPU).")
     p.add_argument("--prompt", type=str, default="Insert the peg into the hole.")
-    p.add_argument("--bridge-ip", type=str, default="192.168.2.200")
+    p.add_argument("--bridge-ip", type=str, default="127.0.0.1",
+                   help="IP of the Black workstation running the bridge, reachable from this host. "
+                        "NOT the robot FCI IP. Use 127.0.0.1 only if the runner is co-located with the bridge.")
     p.add_argument("--action-port", type=int, default=DEFAULT_ACTION_PORT)
     p.add_argument("--obs-bind-ip", type=str, default="0.0.0.0")
     p.add_argument("--obs-port", type=int, default=DEFAULT_OBS_PORT)
