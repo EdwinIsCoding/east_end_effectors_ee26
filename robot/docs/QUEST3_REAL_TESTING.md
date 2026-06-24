@@ -53,7 +53,7 @@ Hold-only (robot connected, no arm motion):
 
 ```bash
 ./build/cpp/teleop_bridge/franka_xr_teleop_bridge \
-  --robot-ip 192.168.2.200 \
+  --robot-ip 192.168.1.11 \
   --obs-port 28081 \
   --no-motion
 ```
@@ -62,7 +62,7 @@ Live teleop:
 
 ```bash
 ./build/cpp/teleop_bridge/franka_xr_teleop_bridge \
-  --robot-ip 192.168.2.200 \
+  --robot-ip 192.168.1.11 \
   --obs-port 28081
 ```
 
@@ -70,7 +70,7 @@ If robot is in `Reflex` mode, clear it first (no motion command):
 
 ```bash
 cd /home/radu/vla-teleop-franka-v2/franka-sanity-checks
-./build/panda_libfranka_sanity --robot-ip 192.168.2.200 --mode recover-only
+./build/panda_libfranka_sanity --robot-ip 192.168.1.11 --mode recover-only
 ```
 
 Then start the teleop bridge again.

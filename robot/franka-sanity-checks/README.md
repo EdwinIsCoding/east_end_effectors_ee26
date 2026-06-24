@@ -80,55 +80,55 @@ After completing [INSTALL.md](./INSTALL.md):
 Read-only connectivity check:
 
 ```bash
-./build/panda_libfranka_sanity --robot-ip 192.168.2.200 --mode read-only --read-samples 200
+./build/panda_libfranka_sanity --robot-ip 192.168.1.11 --mode read-only --read-samples 200
 ```
 
 Tiny motion (single smooth move):
 
 ```bash
-./build/panda_libfranka_sanity --robot-ip 192.168.2.200 --mode tiny-motion --joint-index 3 --delta-rad 0.01 --duration-s 3.0
+./build/panda_libfranka_sanity --robot-ip 192.168.1.11 --mode tiny-motion --joint-index 3 --delta-rad 0.01 --duration-s 3.0
 ```
 
 Tiny motion with one-shot error recovery after abort:
 
 ```bash
-./build/panda_libfranka_sanity --robot-ip 192.168.2.200 --mode tiny-motion --auto-recover
+./build/panda_libfranka_sanity --robot-ip 192.168.1.11 --mode tiny-motion --auto-recover
 ```
 
 Tiny Cartesian translation (direct binary):
 
 ```bash
-./build/panda_libfranka_sanity --robot-ip 192.168.2.200 --mode tiny-cartesian --cart-axis x --delta-m 0.01 --duration-s 15.0 --auto-recover
+./build/panda_libfranka_sanity --robot-ip 192.168.1.11 --mode tiny-cartesian --cart-axis x --delta-m 0.01 --duration-s 15.0 --auto-recover
 ```
 
 Tiny Cartesian translation with safety wrapper script (recommended):
 
 ```bash
-scripts/safe_ee_translate.sh --robot-ip 192.168.2.200 --axis x --delta-m 0.01 --duration-s 15.0 --no-return
+scripts/safe_ee_translate.sh --robot-ip 192.168.1.11 --axis x --delta-m 0.01 --duration-s 15.0 --no-return
 ```
 
 Visible Cartesian move for video (5 cm, safety-limited profile):
 
 ```bash
-scripts/safe_ee_translate.sh --robot-ip 192.168.2.200 --axis x --delta-m 0.05 --duration-s 20.0 --no-return
+scripts/safe_ee_translate.sh --robot-ip 192.168.1.11 --axis x --delta-m 0.05 --duration-s 20.0 --no-return
 ```
 
 Clear Reflex mode only (no motion):
 
 ```bash
-./build/panda_libfranka_sanity --robot-ip 192.168.2.200 --mode recover-only
+./build/panda_libfranka_sanity --robot-ip 192.168.1.11 --mode recover-only
 ```
 
 Gripper check directly:
 
 ```bash
-./build/panda_libfranka_sanity --robot-ip 192.168.2.200 --mode gripper-check
+./build/panda_libfranka_sanity --robot-ip 192.168.1.11 --mode gripper-check
 ```
 
 Gripper check with wrapper script:
 
 ```bash
-scripts/check_gripper.sh --robot-ip 192.168.2.200
+scripts/check_gripper.sh --robot-ip 192.168.1.11
 ```
 
 If you see `communication_constraints_violation` and the robot enters `robot_mode: "Reflex"`, run `recover-only` first, then re-run `read-only`, then `tiny-motion`.

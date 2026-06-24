@@ -53,31 +53,31 @@ cmake --build build -j"$(nproc)"
 Read-only connectivity check:
 
 ```bash
-./build/panda_libfranka_sanity --robot-ip 192.168.2.200 --mode read-only --read-samples 200
+./build/panda_libfranka_sanity --robot-ip 192.168.1.11 --mode read-only --read-samples 200
 ```
 
 Tiny motion (single smooth move):
 
 ```bash
-./build/panda_libfranka_sanity --robot-ip 192.168.2.200 --mode tiny-motion --joint-index 3 --delta-rad 0.01 --duration-s 3.0
+./build/panda_libfranka_sanity --robot-ip 192.168.1.11 --mode tiny-motion --joint-index 3 --delta-rad 0.01 --duration-s 3.0
 ```
 
 Tiny motion with one-shot automatic error recovery after abort:
 
 ```bash
-./build/panda_libfranka_sanity --robot-ip 192.168.2.200 --mode tiny-motion --auto-recover
+./build/panda_libfranka_sanity --robot-ip 192.168.1.11 --mode tiny-motion --auto-recover
 ```
 
 Clear Reflex mode only (no motion):
 
 ```bash
-./build/panda_libfranka_sanity --robot-ip 192.168.2.200 --mode recover-only
+./build/panda_libfranka_sanity --robot-ip 192.168.1.11 --mode recover-only
 ```
 
 Gripper check:
 
 ```bash
-./build/panda_libfranka_sanity --robot-ip 192.168.2.200 --mode gripper-check
+./build/panda_libfranka_sanity --robot-ip 192.168.1.11 --mode gripper-check
 ```
 
 ## Notes

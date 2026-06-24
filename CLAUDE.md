@@ -23,29 +23,31 @@ Work only in your owner dirs. If unsure which machine you're on: GPU + robot pre
   recovered on `main`, the training pipeline is broken without it.
 
 ## ⏳ Desktop D0 bring-up — IN PROGRESS (transient; delete this section when D0 is done)
-State as of 2026-06-24, mid-D0, **across a reboot for the GPU driver**. Full detail in memory `ee26-desktop-d0-env.md`.
+State as of 2026-06-24, mid-D0, **after the reboot for the GPU driver**. Full detail in memory `ee26-desktop-d0-env.md`.
+
+**Robot IP is now `192.168.1.11`** (Edwin-confirmed; was `192.168.2.200`). It's on `192.168.1.0/24` via NIC `enp8s0f2` (desktop `192.168.1.6`). Old `enp8s0f0/f1` still DOWN — ignore them.
 
 **libfranka — system 0.19.0 is WRONG (FR3-era).** The correct **0.9.2 is built at `~/opt/libfranka-0.9.2`** (system 0.19.0 left untouched). Build ALL `robot/` C++ with it:
 ```bash
 export CMAKE_PREFIX_PATH="$HOME/opt/libfranka-0.9.2:$CMAKE_PREFIX_PATH"
 ```
-⚠️ Confirm with Edwin the Panda firmware is really 4.2.x (not an FR3) before going live — 0.19.0's presence is suspicious.
+✅ **Confirmed a real Panda, not an FR3** — read-only sanity connect reports **FCI server version 5** (FR3 is v7+/libfranka 0.10+). `0.9.2` is the right choice.
 
-**Already done (survives reboot):** `franka-sanity-checks` built → `robot/franka-sanity-checks/build/panda_libfranka_sanity` (links 0.9.2; run once robot reachable).
+**Already done (survives reboot):**
+- `franka-sanity-checks` built → `robot/franka-sanity-checks/build/panda_libfranka_sanity` (rpath-links 0.9.2; no LD_LIBRARY_PATH needed).
+- ✅ **Robot connection check PASS** — `--mode read-only` against `192.168.1.11`: 100-sample 1 kHz `read()` loop clean, `robot_mode: Idle`, no errors. RT comms + libfranka↔FCI verified. No motion run yet.
 
-**Post-reboot, do first:**
-1. `nvidia-smi` should now list the RTX 5090. If the pre-reboot sudo script didn't run, run it now (also installs bridge deps):
+**Post-reboot, still to do:**
+1. **GPU driver NOT up yet** (`nvidia-smi` fails; `dkms`/nvidia module never built; nouveau is blacklisted/not loaded). Run:
    ```bash
    sudo apt-get update && sudo apt-get install -y nlohmann-json3-dev dkms nvidia-dkms-595-open
-   printf 'blacklist nouveau\noptions nouveau modeset=0\n' | sudo tee /etc/modprobe.d/blacklist-nouveau.conf
-   sudo update-initramfs -u && dkms status   # expect nvidia/595.71.05, 6.8.0-rt8-franka: installed → then sudo reboot
+   sudo update-initramfs -u && dkms status   # expect nvidia/595.x, 6.8.0-rt8-franka: installed → then sudo reboot
    ```
-   Root cause was: `nvidia-dkms-595-open`+`dkms` were never installed and **nouveau** squatted the card. RT headers present, so it builds.
+   (`/etc/modprobe.d/blacklist-nouveau.conf` already in place — nouveau isn't loading.) Root cause: `nvidia-dkms-595-open`+`dkms` were never installed so no module built. RT headers present, so it builds.
 2. With GPU up → **cu128** PyTorch venv + `torch.cuda.is_available()` + a GPU matmul (Blackwell sm_120).
 
-**Still blocked:**
+**Still blocked (external):**
 - **Bridge build:** needs `nlohmann-json3-dev` (in script above) + **XRoboToolkit PC Service SDK at `/opt/apps/roboticsservice`** (not on this box — external install; CMake hard-requires it even for `--dry-run`).
-- **Robot unreachable — NOT confirmed real.** No `192.168.2.x` route; `enp8s0f0/f1` DOWN; `192.168.2.200` = 100% loss. Fix cable/NIC + Desk FCI unlock, then re-ping (no motion until Edwin confirms).
 - **Cameras:** both D405 unplugged (no Intel-8086 USB); `pyrealsense2` not installed.
 
 ## Repo map
@@ -74,7 +76,7 @@ export CMAKE_PREFIX_PATH="$HOME/opt/libfranka-0.9.2:$CMAKE_PREFIX_PATH"
 ## Key facts / constants
 | | |
 |---|---|
-| Robot (FCI IP) | `192.168.2.200` · libfranka `>=0.9.1,<0.10.0` (rec 0.9.2) · firmware 4.2.x |
+| Robot (FCI IP) | `192.168.1.11` · libfranka `>=0.9.1,<0.10.0` (rec 0.9.2) · firmware 4.2.x |
 | Control stack | OUR libfranka bridge (`robot/franka_xr_teleop`), `kJointImpedance`. NOT multipanda, NOT ROS, NOT Noetic |
 | Cameras | wrist D405 `128422271845` → `observation.images.top`; external D405 `128422271175` → `observation.images.third_person_d405`; 1280×720@30 |
 | Policy IO | `observation.state`=[8] (7 joints + gripper width); `action`=[8] (7 joint pos + gripper) |

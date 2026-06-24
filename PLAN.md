@@ -65,7 +65,7 @@ Organizer confirmed using our own control stack is **score-neutral**, and we hav
 ## Open items
 - [ ] **(Desktop)** Bring-up gate: bridge build, FCI unlock, RT/communication check, both D405s, 5090 cu128 matmul.
 - [ ] **(Desktop)** First teleop + a small diverse demo set → unblocks off-robot O2 (SmolVLA training).
-- [x] FCI IP of the robot — `192.168.2.200` (in `robot/franka_xr_teleop/configs/robot.yaml`).
+- [x] FCI IP of the robot — `192.168.1.11` (in `robot/franka_xr_teleop/configs/robot.yaml`).
 - [x] Control-stack decision — our libfranka bridge (score-neutral, dedicated arm). multipanda = sim sandbox only.
 - [ ] C1 peg/hole geometry (chamfered entries help — control the print if possible); refine annotate vocab with the real shape colour/name.
 - [ ] Intel bonus scope: does the C2 OpenVINO tracker count, or policy only? (ask organizer)

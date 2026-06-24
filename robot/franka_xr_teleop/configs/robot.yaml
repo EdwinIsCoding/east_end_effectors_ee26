@@ -1,5 +1,5 @@
 robot:
-  ip: 192.168.2.200
+  ip: 192.168.1.11
   load_mass_kg: 0.0
   load_center_of_mass_m: [0.0, 0.0, 0.0]
   load_inertia_kgm2: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]

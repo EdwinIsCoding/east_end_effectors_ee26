@@ -45,13 +45,13 @@ void PrintUsage(const char* program) {
             << "             [--duration-s <sec>] [--auto-recover]\n"
             << "             [--gripper-speed <m/s>] [--gripper-pause-s <sec>] [--skip-gripper-homing]\n\n"
             << "Examples:\n"
-            << "  " << program << " --robot-ip 192.168.2.200 --mode read-only\n"
+            << "  " << program << " --robot-ip 192.168.1.11 --mode read-only\n"
             << "  " << program
-            << " --robot-ip 192.168.2.200 --mode tiny-motion --delta-rad 0.01 --duration-s 3.0\n"
+            << " --robot-ip 192.168.1.11 --mode tiny-motion --delta-rad 0.01 --duration-s 3.0\n"
             << "  " << program
-            << " --robot-ip 192.168.2.200 --mode tiny-cartesian --cart-axis z --delta-m 0.01 --duration-s 8.0\n"
-            << "  " << program << " --robot-ip 192.168.2.200 --mode recover-only\n"
-            << "  " << program << " --robot-ip 192.168.2.200 --mode gripper-check\n";
+            << " --robot-ip 192.168.1.11 --mode tiny-cartesian --cart-axis z --delta-m 0.01 --duration-s 8.0\n"
+            << "  " << program << " --robot-ip 192.168.1.11 --mode recover-only\n"
+            << "  " << program << " --robot-ip 192.168.1.11 --mode gripper-check\n";
 }
 
 bool ParseSize(const std::string& value, size_t* out) {

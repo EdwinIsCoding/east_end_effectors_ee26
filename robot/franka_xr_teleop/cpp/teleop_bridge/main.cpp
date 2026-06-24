@@ -63,10 +63,10 @@ void PrintUsage(const char* prog) {
                "[--trace-rt-decimation <N>]\n\n"
             << "Examples:\n"
             << "  " << prog << " --dry-run\n"
-            << "  " << prog << " --robot-ip 192.168.2.200 --control-mode position\n"
-            << "  " << prog << " --robot-ip 192.168.2.200 --control-source policy\n"
-            << "  " << prog << " --robot-ip 192.168.2.200 --save-home\n"
-            << "  " << prog << " --robot-ip 192.168.2.200 --trace-dir trace_run_01\n";
+            << "  " << prog << " --robot-ip 192.168.1.11 --control-mode position\n"
+            << "  " << prog << " --robot-ip 192.168.1.11 --control-source policy\n"
+            << "  " << prog << " --robot-ip 192.168.1.11 --save-home\n"
+            << "  " << prog << " --robot-ip 192.168.1.11 --trace-dir trace_run_01\n";
 }
 
 bool ParseArgs(int argc, char** argv, Options* out) {

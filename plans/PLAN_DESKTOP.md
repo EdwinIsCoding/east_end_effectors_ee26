@@ -3,7 +3,7 @@
 ## ▶ SESSION KICKOFF (read this first, fresh session)
 You are the **DESKTOP** Claude Code session for the EE26 hackathon. Machine: Ubuntu 22.04 Black
 workstation, RT kernel, **RTX 5090 (training runs here)**, ROS2 Humble installed (kept, unused),
-our Franka Panda at **192.168.2.200**. **The robot is real** — confirm before any motion, keep the
+our Franka Panda at **192.168.1.11**. **The robot is real** — confirm before any motion, keep the
 E-stop in reach, never run Desk and the bridge at once.
 **Do first:** `git pull origin main`, then read `README.md`, `CONTRACT.md`, and this file. You own
 `robot/`, `challenge2/` runtime, and **training execution on the 5090**. Work top-to-bottom from D0.
@@ -17,7 +17,7 @@ Commit/push small and often; stay in your owner dirs; `CONTRACT.md` is frozen (p
 ## D0 — Bring-up (no policy needed)
 - [ ] Build bridge: `cmake -S robot/franka_xr_teleop -B robot/franka_xr_teleop/build -DCMAKE_BUILD_TYPE=Release && cmake --build robot/franka_xr_teleop/build -j`
 - [ ] Build + run `robot/franka-sanity-checks` (gripper, safe EE translate).
-- [ ] RT + connection check (libfranka communication test to 192.168.2.200; bridge `--dry-run` then live).
+- [ ] RT + connection check (libfranka communication test to 192.168.1.11; bridge `--dry-run` then live).
 - [ ] Both D405s enumerate (`robot/franka_xr_teleop/tools/record_realsense_camera.py`); serials match `data_collection.yaml` (wrist `…845`, external `…175`).
 - [ ] **5090 GPU check:** PyTorch **cu128** (Blackwell sm_120) + driver ≥570; `torch.cuda.is_available()` + a GPU matmul. (Do this early — it's the silent time-sink.)
 - [ ] Robot homes safely to start pose. **GATE.**

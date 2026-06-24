@@ -186,7 +186,7 @@ Then run the bridge from this repo (example real robot):
 
 ```bash
 cd /home/radu/vla-teleop-franka-v2/franka_xr_teleop
-./build/cpp/teleop_bridge/franka_xr_teleop_bridge --robot-ip 192.168.2.200 --obs-port 28081
+./build/cpp/teleop_bridge/franka_xr_teleop_bridge --robot-ip 192.168.1.11 --obs-port 28081
 ```
 
 ## 7) Quick validation checklist

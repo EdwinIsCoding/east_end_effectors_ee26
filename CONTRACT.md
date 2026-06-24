@@ -53,6 +53,6 @@ Off-robot delivers a directory containing:
 Desktop loads it via `tools/run_vla_policy.py` (Torch) or the OpenVINO runner on Pantherlake.
 
 ## 5. Canonical configs (shared, edited by whoever owns the value)
-`robot/franka_xr_teleop/configs/`: `robot.yaml` (ip `192.168.2.200`, libfranka `>=0.9.1,<0.10.0`),
+`robot/franka_xr_teleop/configs/`: `robot.yaml` (ip `192.168.1.11`, libfranka `>=0.9.1,<0.10.0`),
 `teleop.yaml`, `safety.yaml`, `data_collection.yaml` (camera serials + image keys).
 Treat camera serials, ports, and the image-key names as contract values.

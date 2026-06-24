@@ -132,7 +132,7 @@ Live teleop:
 
 ```bash
 ./build/cpp/teleop_bridge/franka_xr_teleop_bridge \
-  --robot-ip 192.168.2.200 \
+  --robot-ip 192.168.1.11 \
   --obs-port 28081
 ```
 
@@ -141,7 +141,7 @@ controller input with absolute joint targets plus a gripper command over UDP:
 
 ```bash
 ./build/cpp/teleop_bridge/franka_xr_teleop_bridge \
-  --robot-ip 192.168.2.200 \
+  --robot-ip 192.168.1.11 \
   --obs-port 28081 \
   --control-source policy \
   --policy-action-port 28082
@@ -232,7 +232,7 @@ Save the robot's current joint positions as the startup home pose:
 
 ```bash
 ./build/cpp/teleop_bridge/franka_xr_teleop_bridge \
-  --robot-ip 192.168.2.200 \
+  --robot-ip 192.168.1.11 \
   --save-home
 ```
 
@@ -243,7 +243,7 @@ Hold-only mode (data path active, no robot motion):
 
 ```bash
 ./build/cpp/teleop_bridge/franka_xr_teleop_bridge \
-  --robot-ip 192.168.2.200 \
+  --robot-ip 192.168.1.11 \
   --obs-port 28081 \
   --no-motion
 ```

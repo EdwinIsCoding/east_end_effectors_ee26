@@ -97,7 +97,7 @@ Start the teleop bridge with UDP observations enabled:
 
 ```bash
 ./build/cpp/teleop_bridge/franka_xr_teleop_bridge \
-  --robot-ip 192.168.2.200 \
+  --robot-ip 192.168.1.11 \
   --obs-port 28081
 ```
 
