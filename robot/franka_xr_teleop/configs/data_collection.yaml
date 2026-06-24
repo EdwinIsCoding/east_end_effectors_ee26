@@ -36,7 +36,7 @@ cameras:
     role: wrist
     obs_key: observation.images.top
     camera_name: wrist_d405
-    serial: "130322270179"
+    serial: "130322271109"
     color_width: 1280
     color_height: 720
     depth_width: 640
