@@ -54,11 +54,12 @@ python -c "import torch; print(torch.__version__, torch.cuda.is_available(), tor
 
 **✅ Bridge BUILT + dry-run PASS (2026-06-24).** XRoboToolkit PC Service installed via the `.deb` → `/opt/apps/roboticsservice` (SDK at `SDK/include/PXREARobotSDK.h` + `SDK/x64/libPXREARobotSDK.so`; the published deb is in `~/Downloads/`). Built with `CMAKE_PREFIX_PATH=$HOME/opt/libfranka-0.9.2` (default `XROBOTICS_SERVICE_ROOT` resolves). Binary `robot/franka_xr_teleop/build/cpp/teleop_bridge/franka_xr_teleop_bridge` links libfranka 0.9.2 + libPXREARobotSDK + yaml-cpp. `--dry-run --control-source policy` runs clean: policy action source on `udp://0.0.0.0:28082`, obs publisher up, no robot/motion. To install the deb yourself: `sudo apt install -y ~/Downloads/XRoboToolkit_PC_Service_1.0.0_ubuntu_22.04_amd64.deb`.
 
-**Still blocked / pending (need Edwin / hardware):**
-- **Cameras:** both D405 unplugged (no Intel-8086 USB); `pyrealsense2` not installed. Plug in wrist `…845` + external `…175`, then enumerate.
-- **GPU cu128:** pending a reboot into `6.8.0-124-generic` (see recipe above).
-- **Robot motion:** read-only + dry-run done; tiny-motion / homing GATE awaits Edwin (FCI active, E-stop in hand).
-- **Live teleop (D1):** needs the PC Service running (`/opt/apps/roboticsservice/runService.sh`) + Quest 3 paired.
+**✅ Arm motion + homing GATE cleared (2026-06-24):** tiny-motion OK; new `move_to_home` tool drove the arm to `q_home=[0,-π/4,0,-3π/4,0,π/2,π/4]` (slow 6 s quintic). Build: `cmake -S robot/franka-sanity-checks -B …/build && cmake --build …/build` (CMAKE_PREFIX_PATH=libfranka-0.9.2), run `./build/move_to_home 192.168.1.11`. Motion prereq each time: user-stop released + FCI active + brakes unlocked; `self_collision_avoidance_violation` needs a manual hand-guide (auto-recovery rejected).
+**✅ Cameras at HD (2026-06-24):** both D405 stream 1280×720@30 over USB 3.2. Real serials (old contract placeholders were wrong): external `130322273529`→`third_person_d405`; wrist `130322270179`→`top` in configs. ⚠️ Unit `130322273880` is a **dead D405** (USB-2 only even on a known-good cable) — keep it retired; mount a working spare on the wrist and confirm its serial matches `data_collection.yaml`.
+
+**Still pending:**
+- **GPU cu128:** reboot into `6.8.0-124-generic` (recipe above), then validate.
+- **Live teleop (D1):** start the PC Service (`/opt/apps/roboticsservice/runService.sh`) + pair Quest 3.
 
 ## Repo map
 | Path | What |
