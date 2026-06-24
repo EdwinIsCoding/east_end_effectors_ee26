@@ -1,0 +1,41 @@
+# PDFs (reports/handbooks — keep out of git)
+*.pdf
+*.PDF
+
+# OS
+.DS_Store
+
+# Local Claude config (per-machine)
+.claude/
+
+# Build artifacts
+build/
+*.o
+*.so
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# Data / models / logs (large artifacts)
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+wandb/
+outputs/
+checkpoints/
+data/
+datasets/
+*.mp4
+*.bag
+
+# Secrets
+.env
+*.local
+CREDENTIALS.md

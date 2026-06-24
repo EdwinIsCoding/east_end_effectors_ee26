@@ -1,0 +1,17 @@
+xr_frame:
+  description: "XR tracking frame to Franka base frame mapping"
+  rotation_matrix_row_major:
+    - [0.0, 0.0, -1.0]
+    - [-1.0, 0.0, 0.0]
+    - [0.0, 1.0, 0.0]
+  orientation_rotation_matrix_row_major:
+    #- [0.0, 1.0, 0.0] Old mapping for local frame pose control (robot_q * delta_q rather than the other way around)
+    #- [1.0, 0.0, 0.0]
+    #- [0.0, 0.0, -1.0]
+    - [0.0, 0.0, -1.0]
+    - [-1.0, 0.0, 0.0]
+    - [0.0, 1.0, 0.0]
+  notes:
+    - "Matches XRoboToolkit sample R_HEADSET_TO_WORLD default."
+    - "Position and orientation are tuned separately because translation is mapped in the headset/world frame, while orientation uses controller-local delta."
+    - "The orientation mapping is calibrated from local XR controller motions: roll is dominated by local +Z and pitch by local +X, so the default local orientation basis is identity."

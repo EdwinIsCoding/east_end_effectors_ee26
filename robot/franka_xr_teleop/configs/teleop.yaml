@@ -1,0 +1,69 @@
+teleop:
+  xr_input_source: xrobotics_sdk
+  control_source: xr
+  observation_ip: 127.0.0.1
+  observation_port: 28081
+  allow_motion: true
+  dry_run: false
+  a_button_toggles_robot_control: false
+  control_mode: pose
+  scale_factor: 1
+  rotation_scale_factor: 0.5
+  control_trigger_threshold: 0.9
+  control_trigger_release_threshold: 0.8
+  xr_pose_lowpass_alpha: 0.8
+  xr_translation_deadband_m: 0.0005
+  xr_rotation_deadband_rad: 0.03
+  xr_hold_translation_threshold_m: 0.00075
+  xr_hold_rotation_threshold_rad: 0.010
+  xr_hold_release_multiplier: 2.5
+  xr_hold_dwell_s: 0.12
+  planner_rate_hz: 100.0
+  start_joint_positions_rad: [-0.03172855768968763, -0.3, 0.07933473784803836, -2.45, 0.05852869658116116, 2.1, 0.8116081573698255]
+  policy:
+    bind_ip: 0.0.0.0
+    action_port: 28082
+    command_timeout_s: 0.20
+    max_joint_delta_rad: 0.35
+    max_joint_distance_rad: 0.60
+    tracking_position_error_rad: 0.20
+    tracking_target_error_rad: 0.35
+    tracking_fault_dwell_s: 0.25
+    tracking_inhibit_s: 0.75
+  ik:
+    damping: 0.08
+    nullspace_gain: 0.75
+    nullspace_joint_positions_rad: [0, -0.795, 0, -2.356, 0, 1.571, 0.785]
+    planner_substeps: 8
+    max_joint_velocity_radps: 1.5
+    max_joint_acceleration_radps2: 6.0
+    max_joint_jerk_radps3: 80.0
+    max_joint_step_rad: 0.025
+    realtime_joint_deadzone_rad: 0.001
+    realtime_servo_kp: 160.0
+    realtime_servo_kd: 10.0
+    realtime_hold_position_threshold_rad: 0.0008
+    realtime_hold_velocity_threshold_radps: 0.01
+    realtime_hold_release_threshold_rad: 0.0016
+    position_gain: 3.0
+    orientation_gain: 2.0
+    task_translation_deadband_m: 0.0003
+    task_rotation_deadband_rad: 0.01
+    manipulability_threshold: 0.05
+    singularity_damping_gain: 1.0
+  gripper:
+    enabled: true
+    command_mode: binary
+    max_width_m: 0.08
+    min_width_m: 0.0
+    speed_mps: 0.05
+    min_command_delta_m: 0.002
+    max_command_rate_hz: 20.0
+    open_threshold: 0.30
+    close_threshold: 0.70
+    toggle_debounce_s: 0.30
+    stall_width_delta_m: 0.001
+    stall_timeout_s: 0.25
+    width_tolerance_m: 0.0005
+    read_failure_timeout_s: 0.50
+    grasp_force_n: 20.0

@@ -1,0 +1,952 @@
+\documentclass[conference]{IEEEtran}
+\usepackage{subcaption}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{makecell}
+\usepackage{listings}
+\input{setup}
+
+\newcommand{\spacedpar}[0]{\par\vspace{1em}\noindent}
+
+% Define listing style
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{red},
+    breaklines=true,
+    showstringspaces=false,
+    tabsize=4,
+    frame=single,
+    rulecolor=\color{black},
+    backgroundcolor=\color{white},
+    literate={→}{->}2 {—}{-}1 {–}{-}1,
+    extendedchars=true
+}
+
+% A thin rule for decoration
+\newcommand{\titlerule}{\noindent\textcolor{black!30}{\rule{\linewidth}{0.4pt}}}
+
+\begin{document}
+
+% TITLE PAGE (single column, full page)
+\onecolumn
+\begin{titlepage}
+  \centering
+  \vspace*{\fill}
+  % Decorative top rule
+  \titlerule\par\vspace{0.4in}
+  % Institution
+  {\large\scshape University College London \\ Department of Computer Science}
+  \par\vspace{0.3in}
+  % Course label
+  {\normalsize COMP0218: Industrial Project in Robotics and Artificial Intelligence}
+  \par\vspace{0.3in}
+  \titlerule\par\vspace{0.5in}
+  % Report type badge
+  {\normalsize\textit{Industry Project Group Report}}
+  \par\vspace{0.25in}
+  % Main title
+  {\Huge\bfseries VLA-Enabled Grasping and\\[6pt]
+  Manipulation for MSD Plugging}
+  \par\vspace{0.15in}
+  % Subtitle / partner
+  {\large\itshape In Partnership with Extend Robotics}
+  \par\vspace{0.5in}
+  \titlerule\par\vspace{0.45in}
+  % Authors
+  {\large
+    \begin{tabular}{c}
+      Kishan Grewal \quad Han Se Kendall \quad Thomas Moody \\[4pt]
+      Xavier Parker \quad Edwin Redhead
+    \end{tabular}
+  }
+  \par\vspace{0.2in}
+  % Supervisor
+  {\small\textit{Under the supervision of Alex (Zhibin) Li}}
+  \par\vspace{0.3in}
+  % Date
+  {\normalsize May 2026}
+  \par\vspace*{\fill}
+  % Bottom rule
+  \titlerule
+\end{titlepage}
+
+% ---- Back to two-column for the rest of the report ----
+\twocolumn
+
+\begin{abstract} % aoprox 200 words (it's 205)
+This paper presents the development of a Vision-Language-Action (VLA) policy for autonomous grasping and insertion of Manual Service Disconnect (MSD) plugs, undertaken in collaboration with Extend Robotics. MSD plugs are found in high-voltage systems where human operation is hazardous and tactile feedback is severely attenuated by mandatory insulating PPE, making robotic automation both safety-critical and technically demanding.
+
+Working within a compressed 14-day hardware access window, we built a complete teleoperation, data collection, and training pipeline on a 7-DOF Franka Emika Panda arm, collecting 236 demonstration episodes and fine-tuning SmolVLA and ACT policies for the task. In parallel, a haptic-feedback grasping policy was developed on the Robotera xHand1, demonstrating that tactile sensing meaningfully improves hold stability and reduces motor over-exertion. A proof-of-concept MSD plugging policy was successfully demonstrated on hardware.
+
+Key findings include the critical role of controlled output jitter in enabling millimetre-precision plug insertion, the unexpectedly strong sensitivity of single-task fine-tuned VLAs to prompt phrasing, and the advantage of behavioural diversity over data quality in small demonstration datasets. The $\pi_0$ training pipeline was fully validated and the dataset prepared, with near-perfect success rates anticipated upon fine-tuning. The data collection pipeline developed here is task-agnostic and provides a reusable foundation for future precision insertion tasks.
+\end{abstract}
+
+\section{Introduction}
+
+\subsection{Background}
+
+Recent advances in Vision-Language-Action (VLA) models have substantially improved the reliability and generalisation of learned robotic policies, enabling a new class of manipulation tasks that were previously intractable for classical control approaches. Alongside these modelling advances, the landscape of robotic end effectors has diversified considerably: from generalist parallel-jaw grippers and Universal Manipulation Interface (UMI) designs, to purpose-built task-specific grippers optimised for resilience and repeatability on a single operation. Together, these trends open viable paths toward automating physically demanding, high-consequence manipulation tasks that currently require skilled human operators.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.9\linewidth]{images/other/MSD_plug.jpg}
+    \caption{Manual Service Disconnect (MSD) Plug}
+    \label{fig:msd_plug}
+\end{figure}
+
+Manual Service Disconnect (MSD) plugs are a prominent example of such a task. Found in high-voltage systems including electric vehicle battery packs and industrial power distribution infrastructure, MSDs serve a critical safety function: isolating stored electrical energy during maintenance to protect personnel from electrocution. Systems of this type carry continuous current ratings exceeding 200\,A and fuse ratings over 600\,A~\cite{MSD_plug_manual}, placing them firmly in a regime where human error is potentially fatal. Compounding this risk is a shortage of workers qualified to operate on high-voltage systems, and those who do must wear rubber insulating gloves up to 4--5\,cm thick. Gloves of this bulk severely attenuate tactile feedback, degrading the operator's ability to sense contact forces and connector alignment during insertion, precisely the cues most critical to reliable plug mating.
+Robotic automation of MSD manipulation therefore offers a dual benefit: removing human operators from a hazardous environment while potentially restoring the fine-grained force sensitivity that insulating PPE precludes.
+
+\subsection{Project Objectives}
+
+The primary objective of this project, undertaken in collaboration with Extend Robotics, was to demonstrate a hardware-deployed VLA policy capable of grasping and inserting an MSD plug into its corresponding socket. Initial objectives envisioned the xArm7 and xHand1 dexterous hand as the primary platform, with haptic feedback integrated from the outset: early milestones targeted a full simulation stack in Isaac Sim 4.5.0 communicating via ROS1 Noetic, followed by hardware teleoperation with tactile sensing. In practice, the Franka Emika Panda arm at the UCL OPS G07 laboratory proved more accessible for iterative hardware experimentation and became the primary development platform; as the Franka does not support the xHand1, haptic integration was pursued in parallel as a forward-looking workstream rather than a core dependency. Given the novelty and difficulty of the task (comparable manipulation challenges remain unsolved in the broader research community) the work was structured around a set of progressive sub-objectives:
+
+\begin{enumerate}
+    \item Establish a teleoperation pipeline on the Franka Emika Panda arm in the UCL OPS G07 laboratory using a Meta Quest~3 headset, including reliable Cartesian translation and inverse kinematics.
+
+    \item Characterise camera placements and scene configurations to maximise VLA training data quality, an iterative process refined across multiple hardware sessions.
+
+    \item Develop and validate a complete training pipeline supporting both VLA and transformer-based (ACT) policies, using an initial pick-and-place task on primitive objects to de-risk the pipeline before tackling the MSD.
+
+    \item Design and fabricate a purpose-built gripper in place of a generalist end effector, optimising for the mechanical constraints and repeatability demands of MSD plugging.
+
+    \item Collect a diverse demonstration dataset for the MSD plug-socket task and train a family of policies suitable for benchmarking.
+
+    \item Demonstrate a proof-of-concept MSD plugging policy on hardware and identify the principal bottlenecks that would need to be addressed to achieve fully reliable deployment given additional time and resources.
+\end{enumerate}
+
+
+\subsection{Scope}
+
+This work was conducted under laboratory conditions with well-defined boundaries.
+Experiments used a single MSD plug variant inserted into a fixed, upward-facing socket mount: a deliberate simplification relative to the vertical orientations typical of in-situ industrial deployment, chosen to reduce mechanical variability and allow the study to focus on policy learning. A single 7-DOF Franka Emika Panda arm, equipped with a purpose-built 3D-printed gripper, served as the sole hardware platform throughout. The trained policies are specific to the laboratory's camera placement and scene configuration; generalisation to new environments would require retraining or adaptation. Nonetheless, the data collection and training pipeline developed here is task-agnostic and transferable to other precision insertion problems, providing a reusable foundation for future work beyond the MSD domain.
+
+\section{Methods and Technologies} % approx 2 pages
+
+\subsection{Franka Emika Arm}
+
+Our initial plan was to use the 7-DOF variant of the XArm hosted at Extend Robotics as the core system for data collection and model deployment. However, the 7-DOF Franka Emika Panda arm at the UCL OPS G07 laboratory offered more accessible and consistent hardware availability, so we began development there. As we established more frameworks and structure around this system, we pivoted to using it as our main test-bed rather than re-configuring everything to the Extend setup. Discussions with Extend Robotics involving the team and academic supervisor Alex Li encouraged us to pursue this direction fully at UCL, in favour of continuity.
+
+Throughout teleoperation testing, we developed and iteratively refined custom 3D-printed gripper fingers to mount onto the existing arm hardware, which had been configured for the UMI grippers \cite{chi2024universalmanipulationinterfaceinthewild}. These were shaped to engage specific geometric features of the MSD plug, providing better torsional control than pure reliance on friction.
+
+\begin{figure}[ht]
+    \centering
+    \begin{subfigure}{0.3\linewidth}
+        \includegraphics[width=\textwidth,trim={10cm 0cm 10cm 0cm},clip]{images/grippers/Gripper_UMI}
+        \caption{Original UMI}
+        \label{fig:gripper_umi}
+    \end{subfigure}
+    \begin{subfigure}{0.3\linewidth}
+        \includegraphics[width=\textwidth,trim={10cm 0cm 10cm 0cm},clip]{images/grippers/GripperV2_1}
+        \caption{Angled - 30$^\circ$}
+        \label{fig:gripper_v2}
+    \end{subfigure}
+    \begin{subfigure}{0.3\linewidth}
+        \includegraphics[width=\textwidth,trim={10cm 0cm 10cm 0cm},clip]{images/grippers/GripperV3_1}
+        \caption{Vertical}
+        \label{fig:gripper_v3}
+    \end{subfigure}
+    \caption{Gripper Configurations}
+\end{figure}
+
+Additionally, we experimented with foam-lined grasp faces to improve contact friction over bare PLA, which exhibits relatively low and wear-prone tribological properties in dry contact conditions~\cite{zhianihervan2021}. Figure \ref{fig:gripper_foam_wear} highlights the wear this foam incurred  after approximately four hours of data collection. Rubber would have been a superior alternative, though it was not available to us at the time; a print-in-place TPU over-moulding would similarly improve durability, at some cost to grip compliance.
+
+\begin{figure}[ht]
+    \centering
+    \begin{subfigure}{0.45\linewidth}
+        \includegraphics[width=\textwidth,trim={0cm 25cm 0cm 10cm},clip]{images/grippers/gripper_rubber_wear_1}
+    \end{subfigure}
+    \begin{subfigure}{0.45\linewidth}
+        \includegraphics[width=\textwidth,trim={0cm 25cm 0cm 10cm},clip]{images/grippers/gripper_rubber_wear_2}
+    \end{subfigure}
+    \caption{Foam wear after $\approx$ 4 hours of data collection}
+    \label{fig:gripper_foam_wear}
+\end{figure}
+
+
+\subsection{Robotera xHand1}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.9\linewidth]{images/other/robotera_xhand1}
+    \caption{Robotera xHand1}
+    \label{fig:robotera_xhand1}
+\end{figure}
+
+To achieve full dexterous control and manipulation of the MSD plug in a manner similar to humans, we utilised the 12-DOF Robotera xHand1. This is an under-actuated hand, with only 2-DOF fingers and no abduction except on the index finger, but it provides sufficiently high dexterity for basic grasp tasks, as well as embedded 12$\times$10 tactile sensor arrays in each fingertip for grasp feedback.
+
+Each tactile cell returned a 3-element vector of $xyz$ force components, with the $xy$ components allowing for grasp rejection on the basis of a measured slip in the object being held. This data could be fed to the models as training data, either converted to an RGB stream as an additional camera input, or as a raw 1800-element vector in the context window.
+
+The hand did not easily connect to the Franka Emika arm, requiring both a custom interface plate and a cable adapter. Therefore, we ran isolated testing on the hand in parallel, rather than disrupting the teleoperation, training, and deployment of the models.
+
+\subsection{Meta Quest 3}
+
+To fine-tune policies for the plug insertion task, teleoperation data is needed comprising a broad dataset of at least 100 episodes to capture the specific behaviour required (based on empirical guidance from our supervisor). A Meta Quest~3 VR headset was available at the UCL OPS G07 Robotics Laboratory, and its VR controllers provided sufficiently fine hand movement resolution for effective data collection.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.9\linewidth]{images/other/kishan_teleop_plug.png}
+    \caption{Teleoperation setup utilising the Meta Quest~3}
+    \label{fig:teleoperation}
+\end{figure}
+
+With the Meta Quest~3 active, the Franka Emika Panda followed the operator's controller pose via inverse kinematics. The robot moved only while the deadman's switch was held, tracking position relative to where it was engaged. Built-in joint limit constraints protected the robot, its environment and nearby operators throughout.
+
+Normally, the Meta Quest~3 requires the headset to be worn to remain active. To allow the operator to watch the robot directly rather than through a screen, we occluded the proximity sensor with adhesive tack, keeping the device active while worn around the neck. This meaningfully reduced operator fatigue during long data collection sessions.
+
+The headset ran a custom teleoperation application exposing a configuration panel for input mode selection, communicating with the host PC over Android Debug Bridge (ADB). The operator used the Quest~3 controllers to command end-effector pose, with a deadman's switch ensuring the arm moved only on demand and a trigger toggling the gripper between open and closed states. Analogue gripper control was implemented but omitted from data collection as unnecessary for the task. Episode recording was integrated directly into the controller: pressing A began an episode and pressing B ended it, automatically re-homing the robot to a fixed start pose. A 3D bounding box constraint prevented the arm from reaching beyond the table surface or colliding with itself.
+
+\subsection{Hand Tracking Teleoperation} 
+
+As hand testing was conducted separately from arm work in the lab, we did not have the same hardware access for teleoperation. Initial experiments with a LeapMotion~2 controller were possible, but a single-camera hand tracking setup was needed for more flexible use. MediaPipe proved insufficiently stable for data collection purposes, and more capable models such as Hand Mesh Recovery (HaMeR)~\cite{pavlakos2023reconstructinghands3dtransformers} carried too high an inference cost for real-time teleoperation.
+
+Our final solution used the WiLoR framework~\cite{potamias2024wilorendtoend3dhand} built around the MANO hand model~\cite{MANO:SIGGRAPHASIA:2017}, to achieve stable, robust, and sufficiently high-frequency inference for reliable 3D hand tracking.
+
+This was retargeted to the xHand1 using custom metrics tailored to its geometry, with particular focus on thumb behaviour given its importance in grasping tasks. The thumb's joint geometry was the primary reason for a custom retargeting solution: common frameworks such as dex-retargeting~\cite{qin2023anyteleopgeneralvisionbased} struggled with the variable degrees of freedom across the xHand1's fingers.
+
+\subsection{Policies}
+
+All policies were trained and deployed using the LeRobot framework, with inference running on a dedicated machine with an NVIDIA GeForce RTX 4090, communicating with the Franka teleoperation bridge over UDP. The policy layer consumed robot observations, ran model inference, and streamed absolute 7-DOF joint targets back to the bridge at 30\,Hz. This separation reflects a practical necessity: the bridge is implemented in C++ to meet the hard real-time constraints of joint control at 1\,kHz, while the policy layer runs in Python to interface with LeRobot and GPU-accelerated model inference. For flow-matching based policies (SmolVLA and $\pi_0$), we employed Real-Time Chunking (RTC), which generates action chunks asynchronously and blends the initial steps of each new chunk smoothly with the tail of the previous one, avoiding discontinuities at chunk boundaries.
+
+\subsubsection{SmolVLA}
+SmolVLA~\cite{shukor2025smolvlavisionlanguageactionmodelaffordable} was our first policy candidate. As Hugging Face's lightweight vision-language-action model at 450M parameters, it was a natural starting point given its design for fine-tuning on modest demonstration datasets. It takes multiple RGB views, in our case a wrist-mounted first-person camera and a static third-person camera, along with robot joint states, gripper width, and a natural language task description as input, producing a chunk of future joint targets via flow-matching 
+and a binary open-close gripper command, with RTC applied during deployment.
+
+\subsubsection{ACT}
+We evaluated Action Chunking with Transformers (ACT)~\cite{zhao2023learningfinegrainedbimanualmanipulation} as a complementary architecture. ACT uses a ResNet-18 vision backbone with a transformer encoder-decoder to predict action chunks from image observations and joint state alone, without language conditioning. This made it useful both as a simpler, well-established baseline for manipulation and as a means of isolating the contribution of language conditioning relative to SmolVLA.
+
+\subsubsection{$\pi_0$}
+Finally, we evaluated $\pi_0$~\cite{black2026pi0visionlanguageactionflowmodel}, a substantially more capable flow-matching policy from Physical Intelligence, pretrained on a large and diverse corpus of robot demonstrations across multiple embodiments. It follows the same vision-language-action paradigm as SmolVLA but with a significantly larger and more expressive architecture, built on Google's PaliGemma and augmented with a dedicated action expert, totalling 3.3B parameters compared to SmolVLA's 450M. RTC was again employed during deployment.
+
+\subsection{Camera Data Collection}
+
+\subsubsection{Scene Configuration}
+
+Camera positions were determined iteratively to maximise capture of contact-rich interactions while minimising visual noise from the surrounding laboratory environment. The wrist camera migrated from the ZED-M to a custom D405 mount offset from the wrist joint, providing a closer and more direct view of the gripper-plug interface without the wide-angle clutter of the broader lab scene. The third-person camera was similarly repositioned: an initial wide-angle view of the full experiment table, in which the MSD plug appeared small on screen, was replaced with a close-mounted static camera at a slight angle to the socket, capturing both its front and side faces. This framing prioritised the socket's guiding rails, which provide the most informative visual cues for plug alignment. In both cases, care was taken to keep operators out of frame and eliminate unnecessary background variation.
+
+To support the VLA's ability to distinguish task-relevant objects, scene colours were chosen deliberately to maximise contrast and diversity. Custom gripper fingers were printed in green, the socket holder in light blue, and experiments were conducted on a white table surface; together with the orange-and-black MSD plug and socket, this produced a visually distinct and consistent colour palette across all collected episodes.
+
+\subsubsection{Stereolabs ZED-Mini Stereo Camera}
+
+Our initial experiments used the ZED-M stereo camera mounted on the wrist, as it was already installed on the arm. However, as we iterated on the gripper, the camera's minimum focal distance proved too large for the close-range demands of grasping the MSD plug, and it was replaced.
+
+\subsubsection{Intel RealSense D405}
+
+The RealSense D405 provides high-quality RGB-D data with an optimal range of 7--50\,cm, well suited to the close-range nature of the task. Due to the resolution constraints of SmolVLA's input layer, depth data was not used during training; instead, depth was implicitly inferred from the two complementary camera views. For our final setup, two D405 cameras were used: one mounted statically to the table with the socket consistently in frame, and one in a custom wrist mount (Figure~\ref{fig:wrist_d405}), offset from the wrist joint to improve visibility of initial contact during grasping.
+
+\begin{figure}[ht]
+    \centering
+    \begin{subfigure}{0.45\linewidth}
+        \includegraphics[width=\linewidth,trim={15cm 0cm 30cm 0cm},clip]{images/grippers/wrist_cam_1}
+    \end{subfigure}
+    \begin{subfigure}{0.45\linewidth}
+        \includegraphics[width=\linewidth,trim={35cm 10cm 24cm 0cm},clip]{images/grippers/wrist_cam_2}
+    \end{subfigure}
+    \caption{Franka Emika Wrist D405 Mount}
+    \label{fig:wrist_d405}
+\end{figure}
+
+\subsubsection{xHand Cameras}
+The xHand policy was trained using two standard USB webcams: one mounted on a 3D-printed bracket attached to the handle used to manoeuvre the hand, and one mounted statically to the table. To ensure consistent data across sessions, both cameras were configured to fixed exposure, white balance, and focus values using \texttt{v4l2-ctl}.
+
+\subsection{Data Pipeline}
+
+\subsubsection{Collection Protocol}
+
+To approximate a structured factory setting, a designated pickup zone was defined on the right side of the experiment table within the third-person camera's field of view. A nominal plug position was chosen as the base point, with episodes collected across an approximately 20\,cm radius around it to introduce spatial diversity while keeping the task within a learnable distribution. Episode density was weighted slightly toward the nominal point. Plug orientation was varied between $-45°$ and $+45°$ relative to the socket axis, with $0°$ defined as parallel alignment, again with a slight concentration around the canonical orientation to reflect the most common real-world presentation.
+
+\subsubsection{Data Cleaning}
+
+Data collected from the Franka Emika Panda is outputted to \texttt{robot.jsonl}, containing robot states recorded at $\sim$50\,Hz, and \texttt{episode\_events.jsonl}, containing timestamps for episode start and end events recorded when the teleoperator presses A and B on the Meta Quest~3 controller. The cleaning process automatically trims leading and trailing periods of inactivity, and drops episodes without meaningful movement entirely by checking Cartesian translation delta, Cartesian rotation delta, joint position change, and gripper width change against per-channel thresholds to avoid keeping episodes with only sensor noise. Camera frames are synchronised to the nearest robot timestep within a 150\,ms tolerance using nearest-neighbour matching. Episodes shorter than 2 seconds after trimming are discarded. Camera videos are symlinked rather than copied from raw to cleaned datasets for storage efficiency.
+
+Data collected from the xHand1 follows a similar but slightly more complex format. Teleoperation commands are captured by subscribing to the same ROS node as the controller at $\sim$50\,Hz, while robot state, including haptic data, is captured from a separate ROS node at $\sim$80\,Hz. To enable single-operator data collection, episodes begin with a 5-second countdown and end automatically after 10 seconds. This data is post-processed to match the arm pipeline format: haptic readings are converted to an additional RGB camera feed by mapping the $xyz$ force components to RGB channels, and all streams are timing-matched to the 30\,Hz camera feeds before passing through the same cleaning pipeline.
+
+\subsubsection{Data Annotation}
+\label{subsubsection:data_annotation}
+
+VLA models require natural language task descriptions so that policies can generalise across diverse objects and task contexts. To produce varied descriptions automatically, verb, noun, and preposition combinations are sampled and composed at random, with grammatical correctness enforced by ensuring valid verb-preposition pairings.
+
+The MSD plug insertion task comprises multiple discrete phases, and a policy trained on a single global task description can struggle to distinguish between them, leading to blended or inconsistent behaviour at phase transitions. To address this, subtask annotations divide the episode into the following stages: \textit{Approach MSD Plug}, \textit{Position Gripper}, \textit{Grasp Plug}, \textit{Move Plug to Socket}, \textit{Place Plug in Socket}, \textit{Nudge Plug into Socket}, \textit{Align Handle}, and \textit{Push Down on Plug}. As SmolVLA does not natively support subtask conditioning, we forked its open-source repository to stream phase labels as numerical tokens through the parquet files, introducing phase awareness without modifying the inference layer.
+
+The hand grasp task uses three phases: \textit{Await Hand Approach}, \textit{Grasp Block}, and \textit{Hold Block}. Since the hand is manually positioned before the policy acts, these phases are sufficient to capture the full behavioural structure of the task.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.9\linewidth]{images/software/labeller_ui.png}
+    \caption{User Interface for Task and Subtask Labelling}
+    \label{fig:labller_ui}
+\end{figure}
+
+Figure~\ref{fig:labller_ui} shows the labelling interface developed for task and subtask annotation. It displays camera feeds of the recorded episodes alongside a timeline for cropping dead space from episode boundaries, supports global task labelling, and allows subtasks to be added across multiple overlapping channels to handle transitions where phases overlap: for example, grasping the plug whilst aligning the gripper. Episodes deemed failures or likely to introduce undesirable behaviour can be excluded entirely at this stage.
+
+The process of creating subtask labels took considerable time across the whole 200+ episode dataset, as each episode would take 1-2 minutes each. Additionally, human variance introduced inevitable inconsistencies across the dataset, leading to potential confusion in the trained policy. To alleviate this problem, the subtask labelling was automated using the open source Qwen-3 VL instruct models. We decided to use these as we could run them on the UCL GPU clusters accessible to students at no additional cost. The model receives frames from both cameras at each timestep, with a fixed number of surrounding frames for temporal context, alongside a prompt, Listing \ref{appendix:qwen_prompt} that was iteratively refined to improve the reliability of the VLM labelling. The model then outputs per-frame phase labels, which are then briefly verified in the labelling UI before use.
+
+\subsubsection{Data Conversion}
+
+Cleaned datasets are converted into the LeRobotDataset v3 format required by the LeRobot-based policies SmolVLA, ACT, and $\pi_0$. The converter takes the cleaned \texttt{robot.jsonl}, \texttt{episode\_events.jsonl}, and per camera \texttt{rgb.mp4} files as input and produces safetensor files for state and action for each episode with re-encoded H.264 video streams.
+
+Episode boundaries are detected from \texttt{episode\_events.jsonl} using \texttt{episode\_start} and \texttt{episode\_end} events recorded during teleoperation. For each episode, robot timesteps are matched to the nearest camera frame within a 150\,ms tolerance using GPU-accelerated binary search (\texttt{torch.searchsorted}), consistent with the cleaning stage. The state vector contains the 7 joint positions and gripper width; the action vector comprises the 7 commanded joint positions and gripper command.
+
+Camera feeds are assigned to model-specific keys to satisfy each policy's input naming requirements. For SmolVLA, the wrist-mounted D405 feed is stored under \texttt{observation.images.top} as required, with the static scene camera stored under \texttt{observation.images.base\_camera}. For $\pi_0$, a rename map realigns these to the expected keys:
+
+\begin{verbatim}
+"observation.images.top" ->
+    "observation.images.left_wrist_0_rgb"
+"observation.images.base_camera" ->
+    "observation.images.base_0_rgb"
+\end{verbatim}
+
+For the hand setup, the global scene camera is stored under the \texttt{top} key, with additional feeds using \texttt{base\_camera} labels (\texttt{c920\_wrist} and \texttt{haptic}). Per-step phase labels are written to the dataset to enable the subtask-conditioned training described in Section~\ref{subsubsection:data_annotation}.
+
+\subsection{Training Infrastructure}
+
+All models were trained remotely on UCL's GPU cluster using NVIDIA RTX 4070 Ti Super and RTX 4090 GPUs. SmolVLA fine-tuning runs of 20{,}000 steps completed in approximately 1--1.5 hours, while ACT required substantially longer runs of 100{,}000--200{,}000 steps, taking between 5 and 11 hours depending on dataset size and batch configuration.
+
+Access to this infrastructure was a significant practical enabler. The short SmolVLA training cycle meant that a new checkpoint could be trained, deployed, and evaluated on hardware within a single working day, allowing the team to respond rapidly to failure modes observed during deployment and iterate on dataset composition, camera configuration, and annotation quality in tight feedback loops. This cadence was central to the project's ability to progress from a pick-and-place baseline to a functional MSD plugging policy within the available hardware session windows.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.9\linewidth]{images/graphs/smolvla_loss_205_209_20k.png}
+    \caption{SmolVLA-6 training loss over
+    (20{,}000 steps), showing rapid convergence from 2.127 to 0.040. This 
+    convergence profile was representative of all MSD-task SmolVLA runs.}
+    \label{fig:smolvla_loss}
+\end{figure}
+
+Full hyperparameters and a complete training 
+run inventory are provided in Appendix~\ref{appendix:training}.
+
+\section{Results and Demonstrations} % approx 3-4 pages
+\label{sec:results}
+
+\subsection{Franka Emika Panda 7-DOF Arm}
+
+\subsubsection{Pick-and-Place Baseline}
+
+Before attempting MSD plug insertion, we validated the full pipeline (teleoperation, data cleaning, annotation, training, and deployment) on the classic VLA pick-and-place task: transferring a red tomato soup can into a green tray. The visual contrast between objects was deliberately chosen to give the model a tractable first problem, and the task served a dual purpose: confirming pipeline correctness and building operator teleoperation skill that would directly improve data quality for the more demanding MSD task.
+
+This baseline run surfaced two important findings. First, it allowed us to refine the state and action representations passed to and from the model. Second, it revealed clear and contrasting behavioural signatures between SmolVLA and ACT that would inform all subsequent deployment decisions.
+
+SmolVLA produced jittery, erratic joint trajectories but demonstrated meaningful visual reactivity: it could grasp the can and adjust its approach when the can was moved mid-episode. To address the jitter, we applied an Exponential Moving Average (EMA) filter to the policy's joint angle outputs. As shown in Figures~\ref{fig:ema_smoothing_1} and~\ref{fig:ema_smoothing_2}, this substantially reduced oscillatory motion. A lower EMA alpha would have attenuated jitter further, but introduced phase lag that degraded policy responsiveness. The gripper command signal exhibited separate oscillation tendencies, addressed with a latching requirement: the gripper would only act on a new command after it had been held consistently for 7 inference steps. This stabilised the signal at the cost of occasional missed releases that would otherwise have been well-timed.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\linewidth,trim={0cm 7.2cm 0cm 25.2cm},clip]{images/graphs/ema_10_plot}
+    \caption{EMA alpha = 1.0}
+    \label{fig:ema_smoothing_1}
+\end{figure}
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\linewidth,trim={0cm 7.1cm 0cm 25.2cm},clip]{images/graphs/ema_06_plot}
+    \caption{EMA alpha = 0.6}
+    \label{fig:ema_smoothing_2}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth,trim={0cm 0cm 0cm 43.4cm},clip]{images/graphs/latching_plot}
+    \caption{Gripper signal latching}
+    \label{fig:gripper_latching}
+\end{figure}
+
+ACT produced markedly smoother trajectories but showed limited sensitivity to object position: if the can was approximately in the expected location it would grasp successfully, but displaced objects were largely ignored. Whether this reflected a limitation of ACT's visual processing or a deficiency in our training data composition was not conclusively determined. 
+
+\subsubsection{MSD Plug Insertion}
+
+For the MSD plug insertion task, each team member recorded 25 episodes with live filtering of failed attempts, yielding 121 episodes across the first collection session. These were distributed evenly across 5 language prompts, listed in Table~\ref{tab:franka_results_smolvla6_ema0.6_butteroff}. A second collection session of 25 episodes per operator followed, with a deliberate focus on specific practices identified as important from the first session, most notably, consistent and controlled grasping of the plug handle. Two SmolVLA models were trained from this data: SmolVLA~5 on all 10 sets of episodes combined, and SmolVLA~6 on the second set of 5 only. This comparison was designed to test whether training exclusively on higher-quality, more consistent demonstrations would outweigh the reduced dataset size.
+
+During deployment, we evaluated a Butterworth low-pass filter as an alternative to EMA. EMA's phase lag, while acceptable for gross arm motion, was identified as a potential limiting factor for the millimetre-precision required during final plug insertion. A 1\,Hz Butterworth filter was therefore added as an alternative smoothing option. A 3\,Hz variant was also tested but produced erratic and unsafe arm motion and was discontinued on safety grounds.
+
+Performance was evaluated across three sequential metrics:
+\begin{itemize}
+    \item \textbf{Grasp} --- the arm successfully grasped the plug handle 
+    and lifted it with control.
+    \item \textbf{Travel} --- the arm successfully transported the plug 
+    to a position over the socket from which insertion was geometrically 
+    feasible.
+    \item \textbf{Insertion} --- the plug was successfully seated in the 
+    socket.
+\end{itemize}
+
+\begin{figure}[ht]
+    \centering
+    \begin{subfigure}{0.90\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/deployment/successful_grasp.png}
+        \caption{Successful Grasp}
+        \label{fig:successful_grasp}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.90\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/deployment/During_travel.png}
+        \caption{During travel}
+        \label{fig:during_travel}
+    \end{subfigure}
+    
+    \begin{subfigure}{0.90\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/deployment/successful_travel.png}
+        \caption{Successful travel}
+        \label{fig:successful_travel}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.90\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/deployment/successful_insertion.png}
+        \caption{Successful Insertion}
+        \label{fig:successful_insertion}
+    \end{subfigure}
+    \caption{The different stages of the task}
+    \label{fig:different_stages_of_task}
+\end{figure}
+
+Accumulated results across all prompt and filter combinations are presented in Table~\ref{tab:franka_results_models_accumulated}. Two findings stood out. First, prompt choice had a surprisingly large effect on performance: as shown in Table~\ref{tab:franka_results_smolvla6_ema0.6_butteroff}, success rates varied substantially across semantically similar prompts, which had complicated earlier evaluation by making it difficult to distinguish poor model performance from a suboptimal prompt. Second, the choice of smoothing filter had a greater impact on downstream task stages than anticipated, with EMA outperforming the Butterworth filter markedly on Travel and Insertion despite comparable Grasp rates, a finding discussed further in Section~\ref{sec:discussion}.
+
+% \begin{table}[H]
+%     \centering
+%     \small
+%     \begin{tabular}{@{}lcc c@{}}
+%         \toprule
+%         \textbf{Environment} & \textbf{SmolVLA} & \textbf{ACT} & \textbf{$\pi_0$} \\
+%         \midrule
+%         \multicolumn{4}{@{}l}{\textit{Franka Emika Panda 7}} \\[2pt]
+%         \quad Grasp SR & {[Value]} & {[Value]} & \textbf{[Best]} \\
+%         \quad Placement SR & {[Value]} & {[Value]} & \textbf{[Best]} \\
+%         \quad Task SR & {[Value]} & {[Value]} & \textbf{[Best]} \\
+%         \quad Avg. Completion Time (s) & {[Value]} & {[Value]} & \textbf{[Lowest]} \\
+%         \quad Contact Force Violation Score & {[Value]} & {[Value]} & \textbf{[Lowest]} \\
+%         \quad Joint Limit Violation Score & {[Value]} & {[Value]} & \textbf{[Lowest]} \\
+%         \midrule
+%         \multicolumn{4}{@{}l}{\textit{other robot setup?}} \\[2pt]
+%         \quad Success Rate (SR) & {[Value]} & {[Value]} & \textbf{[Best]} \\
+%         \bottomrule
+%     \end{tabular}
+%     \caption{Comparative performance between SmolVLA, ACT, and $\pi_0$.}
+%     \label{tab:results}
+% \end{table}
+
+\begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{@{}lccccc@{}}
+        \toprule
+        \makecell[c]{\textbf{SmolVLA}\\\textbf{Model}} & \makecell[c]{\textbf{EMA}\\\textbf{Alpha}} & \textbf{Butterworth} & \textbf{Grasp} & \textbf{Travel} & \textbf{Insertion} \\
+        \midrule
+        {5} & {0.6} & {N/A} & {33} & {16} & {3} \\
+        {6} & {0.6} & {N/A} & {32} & {11} & {2} \\
+        {5} & {1.0} & {1Hz} & {36} & {9} & {0} \\
+        {6} & {1.0} & {1Hz} & {31} & {6} & {0} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Comparative performance accumulated across all prompts per model and filter configuration}
+    \label{tab:franka_results_models_accumulated}
+\end{table}
+
+\begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{@{}p{4.7cm}ccc@{}}
+        \toprule
+        \textbf{Prompt} & \textbf{Grasp} & \textbf{Travel} & \textbf{Insertion} \\
+        \midrule
+        \multicolumn{4}{@{}l}{\textit{SmolVLA 6, RTC on, ema\_alpha 0.6, Butterworth Filter off}}\\
+        \quad Insert the orange MSD connector inside the mating socket. & {7} & {3} & {0} \\
+        \quad Push the MSD connector fully into the connector housing. & {2} & {0} & {0} \\
+        \quad Connect the orange connector fully into the connector housing. & {7} & {2} & {0} \\
+        \quad Seat the connector plug into the opening of the socket. & {8} & {4} & {2} \\
+        \quad Put the orange MSD connector into the housing. & {8} & {2} & {0} \\
+        \midrule
+        {Totals:} & {32} & {11} & {2} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Comparative performance for 10 trials on each prompt, across grasp, travel, and insertion phases.}
+    \label{tab:franka_results_smolvla6_ema0.6_butteroff}
+\end{table}
+
+ACT was also trained and evaluated on the MSD plug insertion task. While it produced characteristically smooth trajectories, it exhibited the same position-agnostic behaviour observed during the pick-and-place baseline: performance was acceptable only when the plug was placed at or very near a single preferred location, with displacements of more than a few centimetres causing consistent failure. Under these constrained conditions ACT could match SmolVLA's insertion rate with smoother motion, but this positional rigidity made it unsuitable as a general-purpose policy for the task. It was therefore not carried forward for full benchmarking.
+
+\subsection{Robotera xHand1}
+
+Two SmolVLA models were trained for the xHand1: one with haptic data included as an additional input stream, and one without. Both were trained on approximately 110 successful grasp episodes. Data collection was considerably more failure-prone than the arm insertion task, with around 25\% of episodes discarded due to unstable or failed grasps, a consequence of the additional complexity of teleoperating a high-DoF hand. Drawing on experience from the Franka pipeline, task label variation was kept deliberately minimal to reduce the risk of overfitting to prompt phrasing.
+
+Performance was evaluated across five metrics, reported in 
+Table~\ref{tab:xhand_results_configurations}:
+
+\begin{itemize}
+    \item \textbf{False Positive Rate} --- the hand initiating a full grasp 
+    attempt when not positioned over the object (minor twitches excluded).
+    \item \textbf{Grasp Success Rate} --- the hand closing around the object 
+    and maintaining the grasp through an initial lift.
+    \item \textbf{Hold Success Rate} --- the hand maintaining a stable grasp 
+    while the object was moved off the ground. Reported conditional on a 
+    preceding successful grasp, not from raw rates.
+    \item \textbf{Contact Force Violation Score} --- frequency of haptic 
+    readings exceeding a threshold of 45 units ($\approx$5.5\,N), derived 
+    from observed grasp forces in the training data.
+    \item \textbf{Joint Limit Violation Score} --- frequency with which safety 
+    clipping was applied to policy outputs to respect xHand1 joint limits.
+\end{itemize}
+
+Unlike the arm, no additional motion smoothing was applied to the xHand1 policy outputs. The PID-configured ROS commands for the individual joints already provided inherent damping, and crucially, this damping was consistent with the behaviour of the teleoperation pipeline under the same commands, meaning the deployment dynamics matched the conditions under which training data was collected.
+
+Given the contact-rich and dynamic nature of the task, we evaluated several inference chunk sizes. The 50-step chunks used for the arm correspond to $\sim$1.67 seconds at 30\,Hz, during which the policy cannot react to object motion or changes in hand position relative to the target. Reducing to 15-step chunks (0.5 seconds) yielded the best overall performance, particularly in reducing false positive grasp attempts, with the inferencing hardware remaining able to sustain this frequency without introducing noticeable control stutters. Smaller chunks also produced fewer contact force violations, suggesting that higher-frequency inference allows more effective use of haptic feedback, though the limits of our available hardware prevented us from exploring this further.
+
+The presence of haptic data had a meaningful impact on holding performance, most clearly at the 15-step chunk size. The no-haptic policy exhibited a pronounced tendency to re-open the hand after an initially successful grasp, behaviour that was almost entirely absent in the haptic policy, where hold failures were attributable to poor grasps rather than premature release. The haptic policy also produced fewer contact force violations, and the delta between commanded and actual joint positions, visible in Figure~\ref{fig:xhand_finger_plots}, particularly for the index and middle fingers, was substantially lower than in the no-haptic case. This is consistent with the policy using haptic feedback to avoid over-grasped configurations, reducing motor over-exertion and the associated overheating to which the xHand1 is known to be susceptible.
+
+\begin{table}[h]
+    \centering
+    \small
+    \begin{tabular}{@{}lcccc@{}}
+        \toprule
+        \textbf{} & \multicolumn{2}{@{}c}{\textbf{Haptic}} & \multicolumn{2}{@{}c}{\textbf{No Haptic}} \\
+        Chunk Size & 50 & 15 & 50 & 15 \\
+        \midrule
+        \quad Grasp False Positive Rate & 50 & 20 & 55 & 15 \\
+        \quad Grasp SR & 30 & 60 & 25 & 50 \\
+        \quad Hold SR & 50 & 80 & 55 & 65 \\
+        \quad Contact Force Violation Score & 3 & 2 & 4 & 4 \\
+        \quad Joint Limit Violation Score & 1 & 1 & 2 & 1 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Comparative performance between different SmolVLA configurations. High violation scores (out of 10) correspond to more frequent violations}
+    \label{tab:xhand_results_configurations}
+\end{table}
+
+\begin{figure}[h]
+    \centering
+    \begin{subfigure}{\linewidth}
+        \includegraphics[width=\linewidth]{images/graphs/finger_plot_1}
+        \caption{Without haptic data}
+        \label{fig:xhand_finger_plots_nohaptic}
+    \end{subfigure}
+    \vspace{0.5em}
+    \begin{subfigure}{\linewidth}
+        \includegraphics[width=\linewidth]{images/graphs/finger_plot_2}
+        \caption{With haptic data}
+        \label{fig:xhand_finger_plots_haptic}
+    \end{subfigure}
+    \caption{xHand1 policy joint angle plots}
+    \label{fig:xhand_finger_plots}
+\end{figure}
+
+\subsection{\texorpdfstring{$\pi_0$}{Pi0} --- Pipeline Validation}
+
+The $\pi_0$ training pipeline was fully implemented and validated: a complete forward and backward pass on a single batch was confirmed on an RTX 4090, demonstrating that the data pipeline, model configuration, and LeRobot integration were correctly in place. The intention was to submit the trained dataset to the national supercomputing facility the lab had access to at the time for full fine-tuning, contingent on first demonstrating sufficient data quality via SmolVLA results.
+
+This approach was motivated by directly comparable prior work: experiments by our supervisor and colleagues on Trossen arms performing a similar connector insertion task showed that SmolVLA results closely resembling ours improved to near-perfect success rates once the same dataset was used to fine-tune $\pi_0$. The prospects for our dataset were therefore considered strong.
+
+Unfortunately, at the point of submission the research group's allocated compute credits for the national facility had been exhausted, and no alternative compute resource with sufficient capacity could be secured within the remaining hardware access window. $\pi_0$ fine-tuning therefore remains as the most promising immediate next step for this work, with the pipeline and dataset fully prepared for training when compute access is re-established.
+
+\section{Discussion and Evaluation} % approx 2 pages
+\label{sec:discussion}
+
+\subsection{Franka Emika Panda 7-DOF Arm}
+% - smoothing was definitely necessary for smolvla, however too much smoothing caused too much latency, preventing accurate movment. a more stable policy might have less of an issue here, removing the smoothing and therefore the latency issues
+
+One of the most significant findings from deployment was the role of the smoothing algorithm. Without filtering, the arm was too oscillatory to perform reliably. However, the choice of filter mattered considerably beyond simply reducing noise. Although the Butterworth filter produced a marginally higher number of successful grasps (67 vs.\ 65), EMA was substantially better at the travel phase (27 vs.\ 15), and most notably, the Butterworth filter failed to achieve a single insertion while EMA succeeded five times.
+
+Based on recording observations, the residual jitter from EMA visibly assisted the final insertion phase by jostling the plug against the socket geometry: a slightly counter-intuitive behaviour we had anticipated given the millimetre-level precision the task demands. The stick-slip friction and mechanical snagging of the connector housing meant that a fully damped trajectory could not generate the small corrective displacements needed to seat the plug, whereas EMA's residual oscillation provided them naturally. The Butterworth filter, by damping these motions out entirely, removed precisely the behaviour that made insertion possible. The trade-off is that EMA's jitter occasionally disrupted grasping, suggesting that an intermediate smoothing strategy, one that preserves small corrective motions at the end-effector without EMA's phase lag or Butterworth's over-damping, would be the ideal refinement for future work.
+
+% - more experimentation around overfitting prompts would be good, since even with the reduced prompt space we still saw common behaviours per-prompt
+The varying performance across prompts was a notable finding, as standard VLAs do not typically produce such divergent results from semantically similar inputs. One possible explanation is that, with only a single task in the training distribution, the model indirectly associates specific prompt phrasings with particular behavioural patterns seen during training. However, this theory is only partially supported by the data: as shown in Tables~\ref{tab:franka_results_smolvla6_ema0.6_butteroff}, \ref{tab:franka_results_smolvla5_ema0.6_butteroff}, and~\ref{tab:franka_results_smolvla5_ema1.0_butteron}, the lowest-performing prompt for SmolVLA~6 ("Push the MSD connector fully into the connector housing") was not consistently the worst across the SmolVLA~5 sets, suggesting that the smaller dataset of SmolVLA~6 increased variance in prompt sensitivity rather than revealing a stable prompt hierarchy. Prompts drawn from outside the training distribution caused complete task failure in every attempt, with the arm unable to grasp the plug even with human repositioning, confirming that language generalisation did not extend beyond the fine-tuning vocabulary.
+
+% - in the reduced label case, 200-209 performed better than 205-209, whereas with larger label space it was the opposite - seems like more data is more important than high quality data when training properly
+
+The comparison between SmolVLA~5 and SmolVLA~6 yielded a clear practical conclusion: dataset size outweighed data quality in this regime. SmolVLA~5, trained on all 10 episode sets including less consistent demonstrations, outperformed SmolVLA~6 on both travel and insertion while performing only slightly worse in grasping. We attribute this to the value of behavioural diversity in the training data: exposure to episodes where the teleoperator struggled or self-corrected appears to have given SmolVLA~5 recovery strategies that the cleaner but narrower SmolVLA~6 dataset did not provide.
+
+% - more permanent + rigid camera structures likely would have helped - the tripod was not stable enough and the wrist mount still had vibration issues
+
+Camera stability proved to be a more significant factor than anticipated. The external camera was mounted on a tripod with adhesive tape, and small positional deviations between sessions were unavoidable. Given SmolVLA's sensitivity to visual input distribution, even minor scene changes relative to the training configuration likely contributed to policy failures. The wrist-mounted camera also exhibited vibration at critical moments, particularly during grasping and insertion contact, introducing motion blur and viewpoint instability into the observation stream at precisely the frames the policy most needed reliable visual feedback.
+
+% - should probably have tried smaller chunk sizes - its smth I saw work well for the hand, might have especially helped at the end with the insertion (maybe goes in future work section)
+
+The 50-step inference chunks used throughout were a practical compromise given the C++ bridge and UDP communication architecture, which required manual reimplementation of both RTC and asynchronous chunking from the base LeRobot code. Asynchronous blending could not be made to work reliably due to timing disparities between the bridge and policy layers; RTC was therefore used for all benchmarked runs. Full joint trajectory outputs during deployment are provided in Appendix~\ref{appendix:comp_perf} (Figure~\ref{fig:all_joints_policy_output}). In hindsight, and informed by the xHand1 experiments, 50-step chunks corresponding to $\sim$1.67 seconds are likely too coarse for the dynamic contact conditions of the insertion phase. Smaller chunks would have allowed the policy to react to plug-socket contact feedback more frequently, potentially improving the insertion-to-travel success ratio meaningfully.
+
+% - gripper latching requirement - probably not optimal, it was a usable band-aid but this should also be looked into more, might be a model stability issue, might be a data issue (maybe also instruct policy of last command or current TARGET state as well as gripper width it sent for less transitive responses etc)
+
+Finally, the gripper latching mechanism, while effective at stabilising the command signal, introduced command lag that may have caused missed release opportunities during insertion. The sample size of successful travel attempts was too small to draw firm conclusions, but there is some evidence in the joint plots to suggest this hypothesis in Figure \ref{fig:gripper_plot_during_deployment}. Providing the policy with the current gripper target state or the previous frame's gripper command, rather than only the measured gripper width, could reduce transient instability and is worth investigating in future work.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{images//deployment/gripper_plot_during_deployment.png}
+    \caption{Raw Policy outputs for the gripper}
+    \label{fig:gripper_plot_during_deployment}
+\end{figure}
+
+\subsection{Robotera xHand1}
+
+The xHand1 demonstrated promising performance on the grasp task, achieving a 60\% grasp success rate and 80\% hold success rate at 15-step chunks with haptic feedback enabled (Table~\ref{tab:xhand_results_configurations}). Further experimentation in both teleoperation and policy deployment would be required to find an optimal grasp strategy for the MSD plug specifically: grasping the body would be more mechanically secure, but wrapping the handle may be easier to achieve reliably. As a proof of concept for the full teleoperation, data collection, and deployment pipeline, the results were encouraging given the hardware and VLA model constraints. A stereo or depth-sensing wrist camera would additionally reduce the false positive grasp rate by providing better spatial context during the approach phase.
+
+The overall smoothness of raw policy output was a positive signal, likely aided by the relative simplicity of the kinematic chains compared to the 7-DOF arm, with the main challenge being coordinating the individual fingers rather than managing seven linked joints simultaneously.
+
+The absence of abductive joints proved a notable hardware limitation for in-hand reorientation. Adjusting an object's orientation while grasped was sufficiently challenging under teleoperation that collecting sufficient training examples was not feasible. Limited in-hand motion is possible, primarily by rolling through the fingertip and thumb-tip plane, but this weakens the grasp and restricts achievable hand orientations. Alternative hand structures with abduction capability could address this, at the cost of higher degrees of freedom and therefore higher motion complexity.  
+
+For future teleoperation work, a two-point camera system such as the LeapMotion~2 would improve both speed and stability by eliminating the computationally expensive WiLoR inference step and removing the approximately 110\,ms of associated latency. While this latency was acceptable for basic grasp training, it would need to be resolved before attempting concurrent arm-and-hand teleoperation for the insertion phase.
+
+Retargeting also has room for improvement. The custom solution translated pinching and grasping thumb positions into the necessary cross-palm abduction reasonably well, given the xHand1's differing thumb base joint geometry relative to the human hand. However, fine motor control in the pinch state had to be driven from unintuitive motions rather than accurately tracking thumb position. Further experimentation with dex-retargeting, potentially including modifications to the root codebase to address the specific challenges encountered, or additional computed metrics to guide thumb movement could provide a more accurate solution, and would likely improve unstable grasp recovery and hold success rates as a consequence.
+
+\subsection{Comparison with Initial Objectives}
+
+The primary objective of demonstrating a hardware-deployed VLA policy capable of grasping and inserting an MSD plug into its corresponding socket was achieved. All six sub-objectives outlined in the introduction were met, though the path to achieving them diverged from the initial plan in one significant respect.
+
+The most consequential deviation was the platform shift from the xArm7 and Extend Robotics semi-humanoid to the Franka Emika Panda. Both the xArm7 and the semi-humanoid would have accommodated the xHand1 dexterous hand and its haptic feedback natively within the main development workflow, enabling the originally envisioned unified arm-and-hand system. The Franka's mechanical interface precluded this, constraining the primary platform to a purpose-built gripper and relegating xHand1 development to a parallel workstream. This was a pragmatic decision driven by hardware availability and access continuity, and it ultimately allowed faster iteration on the core VLA pipeline --- but it meant the fully integrated haptic-feedback system envisioned at the outset was not demonstrated on the primary platform.
+
+Within the constraints of the Franka-based workflow, all six sub-objectives were achieved:  teleoperation via Meta Quest~3 with reliable inverse kinematics was established; camera placements and scene configurations were characterised iteratively across multiple hardware sessions; a complete training pipeline supporting both SmolVLA and ACT was developed and validated via a pick-and-place baseline before tackling the MSD task; a purpose-built gripper was designed and fabricated; a dataset of 236 episodes was collected and used to train a family of policies for benchmarking; and a proof-of-concept MSD plugging policy was successfully demonstrated on hardware.
+
+The principal unmet objective was the full deployment of a $\pi_0$-based policy, which was precluded by loss of compute access at the point of submission, as detailed in Section~\ref{sec:results}.
+
+\subsection{Limitations and Unexpected Challenges}
+
+\subsubsection{Hardware and Access Constraints}
+
+The most structural limitation of the project was the concentration of all meaningful hands-on work into a single sprint. Prior to the final four weeks, hardware access was limited to the xHand1, which was developed in parallel but ultimately not integrated into the primary platform, and a single day at the Extend Robotics offices, which provided valuable exposure to the teleoperation pipeline but did not yield usable training data due to system constraints on the day. The 14 days of Franka lab access that followed, running approximately 10:30--18:00 Monday to Friday over three weeks, constituted the entirety of the project's setup, data pipeline engineering, data collection, training iteration, and hardware deployment work. This compressed timeline directly constrained dataset size, the number of deployment iterations possible, and the ability to respond to unexpected findings with additional data collection.
+
+The Franka Emika Panda's mechanical incompatibility with the xHand1 was a further structural constraint, as it prevented the originally envisioned unified arm-and-hand system from being realised on the primary platform. Finally, the loss of compute credits at the point of $\pi_0$ submission, with no buffer time remaining to secure an alternative, meant that the most promising path to reliable deployment could not be pursued within the project timeline.
+
+\subsubsection{Camera and Scene Stability}
+
+Camera placement proved more fragile in practice than anticipated. The external third-person camera was mounted on a tripod with adhesive tape, and small positional deviations between sessions were unavoidable. Given SmolVLA's sensitivity to visual input distribution, these deviations likely contributed to policy failures that would not have occurred under a more rigid and permanent mounting solution. The wrist-mounted camera exhibited vibration at the moments of highest mechanical demand (grasping and 
+insertion contact) introducing instability into the observation stream at precisely the frames most critical to policy performance.
+
+\subsubsection{Data Limitations}
+
+The final MSD dataset of 236 episodes, while sufficient to demonstrate proof-of-concept, is modest relative to the scale at which VLA policies typically achieve robust generalisation; large-scale VLA pretraining datasets routinely span tens of thousands of demonstrations across diverse tasks~\cite{brohan2023rt2, black2026pi0visionlanguageactionflowmodel}. Within the dataset, human variance in teleoperation quality across five operators and multiple sessions introduced inconsistency in demonstration style that the model had to absorb. Subtask annotation quality was similarly variable in earlier episodes before the Qwen-based automation was introduced, potentially introducing label noise into the earlier portion of the training data.
+
+\subsubsection{Policy and Deployment Limitations}
+
+SmolVLA's strong sensitivity to prompt phrasing under single-task fine-tuning represents a fundamental architectural concern for task-specific deployment. A model fine-tuned on a diverse multi-task dataset does not exhibit this behaviour, but the single-task distribution appears to cause the model to over-fit prompt phrasings to specific behavioural patterns, reducing robustness to natural language variation. This is an important consideration for any real-world deployment where operator instructions cannot be guaranteed to match the training vocabulary exactly.
+
+The 50-step inference chunks used throughout the Franka deployment correspond to approximately 1.67 seconds of open-loop control, a window that proved too coarse for the dynamic contact conditions of the insertion phase. The xHand1 experiments demonstrated that 15-step chunks meaningfully improved performance on contact-rich tasks, and this finding was not able to be applied to the Franka deployment within the remaining access window.
+
+The gripper latching requirement was an effective pragmatic fix for command signal oscillation but introduced lag that may have caused missed release opportunities during insertion. It addresses a symptom rather than the underlying cause, which may lie in model output instability, data representation, or the absence of gripper target state from the policy's observation. Finally, ACT's position agnosticism, its tendency to execute a fixed spatial trajectory regardless of object position, made it unsuitable for general deployment on the MSD task, where plug placement varies across episodes by design.
+
+\subsubsection{Unexpected Challenges}
+
+One of the most notable findings of the project was that EMA's residual jitter was not merely tolerated but actively beneficial for successful insertion. Going into deployment, we anticipated that the jitter inherent to SmolVLA would be a limiting factor and that smoother motion would improve performance across all phases. In practice, the Butterworth filter's superior damping eliminated the corrective micro-motions that the plug-socket geometry required, confirming that the smoothing problem was one of careful tuning rather than minimisation, and that some degree of controlled jitter was a feature rather than a flaw.
+
+The strength of prompt sensitivity in a single-task fine-tuned VLA was also unexpected. While prompt engineering is a known consideration in VLA deployment, the degree to which semantically near-identical prompts produced substantially different success rates, and the complete failure of out-of-distribution prompts, was beyond what prior experience with multi-task VLAs would have suggested.
+
+\section{Conclusion and Future Work}
+
+\subsection{Conclusion}
+
+This project demonstrated a hardware-deployed VLA policy capable of grasping and inserting an MSD plug into its corresponding socket, in collaboration with Extend Robotics. Working within a compressed hands-on timeline of approximately 14 lab days, the team built a complete data collection and training pipeline from the ground up: establishing Meta Quest~3 teleoperation on a Franka Emika Panda arm, designing and fabricating a purpose-built gripper, collecting 236 demonstration episodes, and training and benchmarking a family of SmolVLA and ACT policies. In parallel, a dexterous hand grasping policy with haptic feedback was developed on the Robotera xHand1, demonstrating that tactile sensing meaningfully improves hold stability and reduces motor overexertion in contact-rich manipulation.
+
+The primary objective was achieved: a proof-of-concept MSD plugging policy was successfully demonstrated on hardware. Key findings include the role of controlled jitter in enabling millimetre-precision insertion, the strong influence of prompt phrasing on single-task VLA performance, and the advantage of dataset diversity over dataset purity in this fine-tuning regime. The pipeline and dataset developed here provide a reusable foundation for future work on this and related precision insertion tasks, with $\pi_0$ fine-tuning representing the most promising immediate next step.
+
+\subsection{Future Developments}
+
+Several directions would meaningfully extend this work:
+
+\begin{itemize}
+    \item \textbf{$\pi_0$ training and evaluation.} The pipeline and dataset are fully prepared; compute access is the only remaining prerequisite.
+    
+    \item \textbf{Setup formalisation.} Replacing ad-hoc camera mounting with a rigid, reproducible rig using fixed reference points would eliminate session-to-session positional drift and improve policy consistency.
+
+     \item \textbf{Hardware-agnostic policy framework.} A platform-independent training and deployment framework would allow policies to transfer across any arm or arm-mounted humanoid, reducing the cost of adapting the pipeline to new hardware.
+    
+    \item \textbf{Algorithmic in-painting.} Removing unwanted in-frame elements such as parasite objects or background clutter algorithmically would reduce visual noise without requiring physical scene changes.
+    
+    \item \textbf{Extended dataset and model benchmarking.} Collecting more episodes, including demonstrations targeting known failure modes , and systematically varying sub-dataset composition would allow identification of the optimal training mixture. Benchmarking against a broader set of policy architectures would further characterise the performance ceiling of the current approach. The OmniReset framework \cite{yin2026emergent} is a particularly promising avenue: its long-horizon task approach stitches together separate emergent skills from individual training stages into compound tasks, which could enable more efficient data generation by training grasp and insertion phases independently, complementing the subtask labelling pipeline developed here.
+    
+    \item \textbf{xHand1 integration on xArm and semi-humanoid.} Deploying the xHand1 on platforms that natively support it would enable the originally envisioned unified arm-and-hand system and allow direct comparison against the custom gripper approach.
+
+    \item \textbf{Collaborative arm-hand policy.} Rather than replacing the gripper entirely, the xHand1 policy could operate as an assistive policy alongside the arm policy, with a shared command state interface defining phases such as await, grasp, hold, and insertion micro-adjustments. The arm policy would drive task progression while the hand policy handles fine-grained contact control, combining the spatial reach of the arm with the dexterity and haptic sensitivity of the hand.
+    
+    \item \textbf{Vertical plug orientation.} Extending to the vertically-oriented configurations typical of real industrial deployments is the critical step toward practical applicability. This would likely follow naturally from a switch back to the original XArm target, since the Franka Emika arm geometry is configured for natural vertical wrist orientation, whereas the XArm is more suited to the horizontal configuration required for a vertical plug. 
+\end{itemize}
+
+% \section{References} following line already prints this
+\printbibliography
+
+\newpage
+\onecolumn
+
+\appendix
+\section{Media and Code}
+
+\noindent\textbf{Summary Video}\\
+\url{https://www.youtube.com/watch?v=N9xy-LNPuR8}
+
+\bigskip
+\noindent\textbf{GitHub Repositories}
+\begin{itemize}
+    \item Data Pipeline: \url{https://github.com/Mr-Moody/SmolVLA-Testing}
+    \item Franka Panda Teleoperation and Deployment: \url{https://github.com/kishan-grewal/vla-teleop-franka-v2}
+    \item XHand Teleoperation and Deployment: \url{https://github.com/HK-98878/xhand-teleoperation}
+    \item Models and Datasets: \url{https://huggingface.co/NexusDwin}
+\end{itemize}
+
+\bigskip
+
+
+
+\section{Training Details}
+\label{appendix:training}
+
+\begin{minipage}[b]{0.48\linewidth}
+    \begin{table}[H]
+    \centering
+    \caption{SmolVLA shared hyperparameters}
+    \label{tab:smolvla_hyperparams}
+    \begin{tabular}{ll}
+    \toprule
+    \textbf{Parameter} & \textbf{Value} \\
+    \midrule
+    Pretrained checkpoint & \texttt{lerobot/smolvla\_base} \\
+    Optimizer & AdamW \\
+    Learning rate & $1\times10^{-4}$ \\
+    Betas & $(0.9,\ 0.95)$ \\
+    Epsilon & $1\times10^{-8}$ \\
+    Weight decay & $1\times10^{-10}$ \\
+    Gradient clip & 10 \\
+    Scheduler & Cosine decay with warmup \\
+    Warmup steps & 1{,}000 \\
+    Decay steps & 30{,}000 \\
+    Peak / decay LR & $1\times10^{-4}$ / $2.5\times10^{-6}$ \\
+    Chunk size / action steps & 50 / 50 \\
+    Observation steps & 1 \\
+    Flow steps & 10 \\
+    VLM layers & 16 \\
+    Freeze vision encoder & Yes \\
+    Train expert only & Yes \\
+    Image size & $512\times512$ \\
+    Attention mode & Cross-attention \\
+    Image transforms & Disabled \\
+    Seed & 1{,}000 \\
+    \bottomrule
+    \end{tabular}
+    \end{table}
+\end{minipage}
+\begin{minipage}[b]{0.48\linewidth}
+    \begin{table}[H]
+    \centering
+    \caption{ACT shared hyperparameters}
+    \label{tab:act_hyperparams}
+    \begin{tabular}{ll}
+    \toprule
+    \textbf{Parameter} & \textbf{Value} \\
+    \midrule
+    Optimizer & AdamW \\
+    Learning rate & $1\times10^{-5}$ \\
+    Weight decay & $1\times10^{-4}$ \\
+    Gradient clip & 10 \\
+    Scheduler & None \\
+    Chunk size / action steps & 100 / 100 \\
+    Observation steps & 1 \\
+    Vision backbone & ResNet-18 (no pretraining, no dilation) \\
+    Transformer dim & 512 \\
+    Attention heads & 8 \\
+    Encoder / decoder layers & 4 / 1 \\
+    Feedforward dim & 3{,}200 \\
+    Dropout & 0.1 \\
+    VAE & Enabled \\
+    VAE latent dim & 32 \\
+    KL weight & 10.0 \\
+    Temporal ensemble & None \\
+    AMP & Disabled \\
+    Seed & 1{,}000 \\
+    \bottomrule
+    \end{tabular}
+    \end{table}
+\end{minipage}
+
+\begin{table}[H]
+\centering
+\caption{Training run inventory}
+\label{tab:training_runs}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{llllcccc}
+\toprule
+\textbf{Run} & \textbf{Model} & \textbf{Dataset} & \textbf{Cameras} & 
+\textbf{BS} & \textbf{AMP} & \textbf{Steps} & \textbf{Duration} \\
+\midrule
+001\_002\_003\_smolvla\_full & SmolVLA & merged\_001\_002\_003 & top, 3rd-person D405 & 8 & Yes & 20k & 3h 04m \\
+001\_002\_003\_smolvla (annot.) & SmolVLA & merged\_001\_002\_003 (annot.) & top, 3rd-person D405 & 8 & Yes & 20k & $\sim$2h 55m \\
+train\_100\_101\_102\_103\_smolvla & SmolVLA & merged\_train\_100\_101\_102\_103 & top, ZED-M, 3rd-person D405 & 8 & Yes & 20k & 1h 00m \\
+test\_100\_101\_102\_103\_act & ACT & merged\_test\_100\_101\_102\_103 & top, ZED-M, 3rd-person D405 & 4 & No & 100k & 5h 52m \\
+backfilled\_100\_101\_102\_103\_smolvla & SmolVLA & merged\_backfilled\_100\_101\_102\_103 & top, ZED-M, 3rd-person D405 & 4 & Yes & 20k & 1h 44m \\
+msd\_plug\_200\_204\_smolvla & SmolVLA & merged\_msd\_plug\_200\_204 (121 ep.) & top only & 8 & Yes & 20k & 41m \\
+msd\_plug\_200\_204\_act & ACT & merged\_msd\_plug\_200\_204 (121 ep.) & top only & 8 & No & 100k & 4h 42m \\
+msd\_plug\_200\_209\_smolvla & SmolVLA & merged\_msd\_plug\_200\_209 (236 ep.) & top, wrist D405 & 8 & Yes & 25k & 1h 26m \\
+msd\_plug\_200\_209\_act & ACT & merged\_msd\_plug\_200\_209 (236 ep.) & top, wrist D405 & 4 & No & 200k & 10h 40m \\
+msd\_plug\_205\_209\_smolvla & SmolVLA & merged\_msd\_plug\_205\_209 (115 ep.) & top, wrist D405 & 8 & Yes & 20k & 1h 09m \\
+msd\_plug\_200\_209\_smolvla\_v2 & SmolVLA & merged\_msd\_200\_209 & top, 3rd-person D405 & 8 & No & 20k & $\sim$1h 24m \\
+msd\_plug\_205\_209\_smolvla\_v2 & SmolVLA & merged\_msd\_205\_209 & top, 3rd-person D405 & 8 & No & 20k & 1h 28m \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\section{Comparative Performance}
+\label{appendix:comp_perf}
+
+\begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{@{}lccc@{}}
+        \toprule
+        \textbf{Prompt} & \textbf{Grasp} & \textbf{Travel} & \textbf{Insertion} \\
+        \midrule
+        \multicolumn{4}{@{}l}{\textit{SmolVLA 5, RTC on, ema\_alpha 0.6, Butterworth Filter off}}\\
+        \quad Insert the orange MSD connector inside the mating socket. & {7} & {1} & {1} \\
+        \quad Push the MSD connector fully into the connector housing. & {7} & {4} & {0} \\
+        \quad Connect the orange connector fully into the connector housing. & {6} & {3} & {0} \\
+        \quad Seat the connector plug into the opening of the socket. & {6} & {4} & {1} \\
+        \quad Put the orange MSD connector into the housing. & {7} & {4} & {1} \\
+        \midrule
+        {Totals:} & {33} & {16} & {3} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Comparative performance for 10 trials on each prompt, across grasp, travel, and insertion phases.}
+    \label{tab:franka_results_smolvla5_ema0.6_butteroff}
+\end{table}
+
+
+\begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{@{}lccc@{}}
+        \toprule
+        \textbf{Prompt} & \textbf{Grasp} & \textbf{Travel} & \textbf{Insertion} \\
+        \midrule
+        \multicolumn{4}{@{}l}{\textit{SmolVLA 5, RTC on, ema\_alpha 1.0, Butterworth Filter 1.0 Hz}}\\
+        \quad Insert the orange MSD connector inside the mating socket. & {9} & {4} & {0} \\
+        \quad Push the MSD connector fully into the connector housing. & {8} & {2} & {0} \\
+        \quad Connect the orange connector fully into the connector housing. & {6} & {2} & {0} \\
+        \quad Seat the connector plug into the opening of the socket. & {5} & {1} & {0} \\
+        \quad Put the orange MSD connector into the housing. & {8} & {0} & {0} \\
+        \midrule
+        {Totals:} & {36} & {9} & {0} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Comparative performance for 10 trials on each prompt, across grasp, travel, and insertion phases.}
+    \label{tab:franka_results_smolvla5_ema1.0_butteron}
+\end{table}
+
+\begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{@{}lccc@{}}
+        \toprule
+        \textbf{Prompt} & \textbf{Grasp} & \textbf{Travel} & \textbf{Insertion} \\
+        \midrule
+        \multicolumn{4}{@{}l}{\textit{SmolVLA 6, RTC on, ema\_alpha 1.0, Butterworth Filter 1.0 Hz}}\\
+        \quad Insert the orange MSD connector inside the mating socket. & {7} & {0} & {0} \\
+        \quad Push the MSD connector fully into the connector housing. & {4} & {0} & {0} \\
+        \quad Connect the orange connector fully into the connector housing. & {5} & {1} & {0} \\
+        \quad Seat the connector plug into the opening of the socket. & {8} & {5} & {0} \\
+        \quad Put the orange MSD connector into the housing. & {7} & {0} & {0} \\
+        \midrule
+        {Totals:} & {31} & {6} & {0} \\
+        \bottomrule
+    \end{tabular}
+    \caption{Comparative performance for 10 trials on each prompt, across grasp, travel, and insertion phases.}
+    \label{tab:franka_results_smolvla6_ema1.0_butteron}
+\end{table}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=1\linewidth]{images//deployment/All_joints_plot.png}
+    \caption{Raw policy outputs for all joints}
+    \label{fig:all_joints_policy_output}
+\end{figure}
+
+\section{Qwen Prompt}
+\label{appendix:qwen_prompt}
+
+\begin{lstlisting}[caption={MSD Plug Insertion Labeling Prompt used for Qwen3}, label={lst:Qwen_msd_prompt}]
+ f"""You are labeling robot arm subtasks for MSD plug insertion.
+TASK: Insert a Micro-D Subminiature (MSD) plug into a socket on a blue block. The plug has a rectangular connector body and a thumb-screw handle.
+KEY TERMS - PLUG = object held by gripper. SOCKET = fixed receptor on the blue block. These are different objects.
+{context_note}
+{history_text}
+{robot_section}
+CANONICAL SEQUENCE (normal progression - can restart from any earlier step if plug is dropped):
+  1. approach_MSD_plug
+  2. positioning_the_gripper
+  3. grasp_the_plug
+  4. move_the_plug_to_the_socket
+  5. place_the_plug_in_the_socket
+  6. nudging_the_plug_into_the_socket  [uncommon]
+  7. align_handle                       [rare]
+  8. push_down_on_the_plug
+
+RECOVERY (plug dropped - look for plug on table, gripper empty or re-opening):
+  If plug is visible on the table and gripper is empty → label as approach_MSD_plug (restart)
+  If gripper is repositioning above a dropped plug → label as positioning_the_gripper
+  Any step after grasp_the_plug can restart to approach_MSD_plug if plug is lost
+
+SUBTASK DEFINITIONS:
+
+approach_MSD_plug
+  START: arm begins moving from rest toward the plug lying on the table
+  END:   gripper fingertips reach the height of the plug handle OR settle directly above it
+  VISUAL: broad fast arm motion; gripper open; plug unconstrained on table; gripper far from plug
+  != positioning_the_gripper: approach is fast/coarse; positioning is slow/fine at plug level
+
+positioning_the_gripper
+  START: gripper slows to make fine adjustments around the plug
+  END:   fingers begin to close
+  VISUAL: gripper open; fingertips at same height as plug handle; plug visible between open jaws; slow precise movements
+  != approach_MSD_plug: if arm is still in fast broad motion, use approach instead
+
+grasp_the_plug
+  START: fingers begin visibly narrowing toward the plug
+  END:   fingers fully closed and stationary around plug
+  VISUAL: finger gap shrinking; plug handle starting to be squeezed
+  DURATION: typically under 1 second
+
+move_the_plug_to_the_socket
+  START: plug is firmly held, arm begins broad motion transporting it toward socket
+  END:   plug tip is directly above socket entry or adjacent to socket opening
+  VISUAL: arm in broad fast motion; plug held securely in closed gripper; gripper traveling through space; socket visible but at distance; clear arm-level transit motion
+  != place_the_plug_in_the_socket: move is the travel phase with the plug in mid-air; place begins when plug tip approaches socket opening
+  != positioning_the_gripper: move involves large arm motions, not fine gripper adjustments
+
+place_the_plug_in_the_socket
+  START: plug tip is directly above or adjacent to socket opening
+  END:   plug body is fully or mostly inserted into socket cavity (connector seated, not yet locked)
+  VISUAL: plug descending slowly toward socket; tip entering socket hole; slow careful downward/insertion motion; plug and socket in close proximity and aligned; gripper still holding plug
+  != move_the_plug_to_the_socket: place is the insertion phase, not the transit phase
+  != nudging_the_plug_into_the_socket: place is the initial insertion; nudging is after plug is already seated with fine lateral adjustments
+
+nudging_the_plug_into_the_socket  [UNCOMMON — most insertions skip this]
+  START: plug is already partially or fully inserted into socket, gripper fingers still closed around plug
+  END:   plug fully seated with no gaps (connector face flush with socket face)
+  VISUAL: gripper fingers closed around plug that is already in socket; small lateral side-to-side or pressing adjustments; fine-tuning motion, not broad arm transit; plug already visible inside socket cavity
+  != place_the_plug_in_the_socket: nudging occurs AFTER the plug is already in the socket; placing is the initial insertion descent
+  NOTE: Only label if gripper is actively pushing sideways/laterally on the plug to seat it deeper. If gripper is just holding stationary around seated plug, this is not nudging.
+
+align_handle  [RARE]
+  START: plug handle is visibly tilted off-vertical after partial insertion
+  END:   handle restored to upright position
+  VISUAL: thumb-screw handle clearly leaning; gripper pushing handle upright
+
+push_down_on_the_plug  [ALWAYS LAST]
+  START: gripper OPENS and presses down on top face of already-inserted plug
+  END:   arm begins to retract away
+  VISUAL: gripper open; finger pads pressing on top surface of plug body; plug already seated in socket
+  != place_the_plug_in_the_socket: here the gripper is OPEN pressing from above, not inserting
+
+VALID CO-OCCURRENCES (the only pairs that can be active simultaneously):
+  positioning_the_gripper + grasp_the_plug      (fingers closing while still adjusting)
+  move_the_plug_to_the_socket + place_the_plug_in_the_socket  (plug arriving at socket during transit)
+  nudging_the_plug_into_the_socket + align_handle              (simultaneous seating corrections)
+All other combinations are INVALID. Do not output more than 2 labels at once.
+TEMPORAL STABILITY: A subtask typically lasts several seconds. If you labeled the previous frame as X and nothing has clearly changed, output X again. Only switch when you see an unambiguous visual change.
+OUTPUT FORMAT: Output one or two subtask names separated by a comma. No explanation. No punctuation other than the comma separator. No extra words.
+Examples of valid output:
+  approach_MSD_plug
+  positioning_the_gripper,grasp_the_plug
+  move_the_plug_to_the_socket
+  place_the_plug_in_the_socket
+  nudging_the_plug_into_the_socket"""
+\end{lstlisting}
+
+\end{document}
+
