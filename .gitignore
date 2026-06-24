@@ -23,6 +23,8 @@ env/
 .ipynb_checkpoints/
 
 # Data / models / logs (large artifacts)
+# NOTE: ignore dataset dirs by specific name, NOT a bare `data/` — that would
+# also drop the tracked `training/src/data/` package.
 *.ckpt
 *.pt
 *.pth
@@ -30,8 +32,12 @@ env/
 wandb/
 outputs/
 checkpoints/
-data/
 datasets/
+raw_datasets/
+cleaned_datasets/
+lerobot_datasets/
+raw_recordings/
+recordings/
 *.mp4
 *.bag
 
