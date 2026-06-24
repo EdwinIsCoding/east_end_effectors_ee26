@@ -52,9 +52,13 @@ pip install --index-url https://download.pytorch.org/whl/cu128 torch
 python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0)); x=torch.randn(4096,4096,device='cuda'); print((x@x).sum().item())"
 ```
 
-**Still blocked (external):**
-- **Bridge build:** `nlohmann-json3-dev` ✅ installed. Still needs **XRoboToolkit PC Service SDK** (Edwin has source/link). CMake wants `SDK/include/PXREARobotSDK.h` + `SDK/linux/64/libPXREARobotSDK.so`; point it via `-DXROBOTICS_SERVICE_ROOT=<path>`.
-- **Cameras:** both D405 unplugged (no Intel-8086 USB); `pyrealsense2` not installed.
+**✅ Bridge BUILT + dry-run PASS (2026-06-24).** XRoboToolkit PC Service installed via the `.deb` → `/opt/apps/roboticsservice` (SDK at `SDK/include/PXREARobotSDK.h` + `SDK/x64/libPXREARobotSDK.so`; the published deb is in `~/Downloads/`). Built with `CMAKE_PREFIX_PATH=$HOME/opt/libfranka-0.9.2` (default `XROBOTICS_SERVICE_ROOT` resolves). Binary `robot/franka_xr_teleop/build/cpp/teleop_bridge/franka_xr_teleop_bridge` links libfranka 0.9.2 + libPXREARobotSDK + yaml-cpp. `--dry-run --control-source policy` runs clean: policy action source on `udp://0.0.0.0:28082`, obs publisher up, no robot/motion. To install the deb yourself: `sudo apt install -y ~/Downloads/XRoboToolkit_PC_Service_1.0.0_ubuntu_22.04_amd64.deb`.
+
+**Still blocked / pending (need Edwin / hardware):**
+- **Cameras:** both D405 unplugged (no Intel-8086 USB); `pyrealsense2` not installed. Plug in wrist `…845` + external `…175`, then enumerate.
+- **GPU cu128:** pending a reboot into `6.8.0-124-generic` (see recipe above).
+- **Robot motion:** read-only + dry-run done; tiny-motion / homing GATE awaits Edwin (FCI active, E-stop in hand).
+- **Live teleop (D1):** needs the PC Service running (`/opt/apps/roboticsservice/runService.sh`) + Quest 3 paired.
 
 ## Repo map
 | Path | What |
