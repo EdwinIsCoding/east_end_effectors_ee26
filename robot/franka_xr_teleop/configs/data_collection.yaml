@@ -16,7 +16,7 @@ cameras:
     role: third_person
     obs_key: observation.images.third_person_d405
     camera_name: third_person_d405
-    serial: "128422271175"
+    serial: "130322273529"
     color_width: 1280
     color_height: 720
     depth_width: 640
@@ -36,7 +36,7 @@ cameras:
     role: wrist
     obs_key: observation.images.top
     camera_name: wrist_d405
-    serial: "128422271845"
+    serial: "130322273880"
     color_width: 1280
     color_height: 720
     depth_width: 640
