@@ -78,19 +78,27 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < 7; ++i) std::cout << q_start[i] << (i < 6 ? ", " : "]\n");
     std::cout << "q_goal  = [";
     for (size_t i = 0; i < 7; ++i) std::cout << q_goal[i] << (i < 6 ? ", " : "]\n");
-    std::cout << "max joint delta = " << max_delta << " rad over " << duration_s
-              << " s (peak speed ~" << (1.875 * max_delta / duration_s) << " rad/s)\n";
-
-    if (max_delta > 1.5) {
-      std::cerr << "max_delta > 1.5 rad — unexpectedly large, aborting for safety.\n";
+    // Safety is governed by peak joint speed, not total distance: a large move is
+    // fine if slow. Sanity backstop only — a single joint's full range is ~2.9 rad,
+    // and the goal is already clamped to joint limits above.
+    constexpr double kMaxRehomeDelta = 3.0;   // rad
+    constexpr double kPeakSpeedCap = 0.4;     // rad/s (quintic peak = 1.875*delta/T)
+    if (max_delta > kMaxRehomeDelta) {
+      std::cerr << "max_delta " << max_delta << " > " << kMaxRehomeDelta
+                << " rad — unexpectedly large, aborting for safety.\n";
       return 2;
     }
+    // Extend the requested duration if needed to keep the peak speed under the cap.
+    const double eff_duration =
+        std::max(duration_s, 1.875 * max_delta / kPeakSpeedCap);
+    std::cout << "max joint delta = " << max_delta << " rad; using " << eff_duration
+              << " s (peak speed ~" << (1.875 * max_delta / eff_duration) << " rad/s)\n";
 
     double time = 0.0;
     robot.control([&](const franka::RobotState&,
                       franka::Duration period) -> franka::JointPositions {
       time += period.toSec();
-      const double tau = time / duration_s;
+      const double tau = time / eff_duration;
       const double s = Quintic(tau);
       std::array<double, 7> q_cmd{};
       for (size_t i = 0; i < 7; ++i) {
