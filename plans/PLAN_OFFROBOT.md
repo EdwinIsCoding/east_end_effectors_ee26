@@ -30,7 +30,10 @@ owner dirs; `CONTRACT.md` is frozen (ping the user before changing a contract va
 ## O3 — OpenVINO + Pi0 (Intel bonus / ceiling)
 - [x] Export path documented (`policy.export(..., backend="openvino")`, `InferenceModel.load`) — `src/inference/README.md`.
 - [x] **Pantherlake inference runner** `src/inference/openvino_runner.py`: emits UDP 28082 per `CONTRACT §2`, lazy HW deps, `--mock`/`--self-test`. Self-test + 5 unit tests green. **Verify obs/action shapes on the Intel box.**
-- [ ] Prepare LoRA Pi0 fine-tune config for when SmolVLA data quality is proven.
+- [x] Pi0 single-5090 fine-tune config `configs/training/pi0_c1.yaml` (freeze-vision-encoder + expert-only + grad-checkpoint + bf16; no LoRA flag in CLI). Validated by test_training_configs.
+
+## O4 — C2 ball-balance (drafted, hardware-free) ✅
+- [x] `challenge2/src`: tracker (numpy colour-blob / cv2 Hough), PD controller, plate-tilt→pose, loop+CommandSink. 5 tests incl. a PD-stabilizes sim. Desktop wires CommandSink to the bridge Cartesian-pose path.
 
 ## O4 — C2 logic drafts (hand to Desktop)
 - [ ] Draft the ball tracker (colour-blob / Hough) + PD/LQR controller as pure Python; test on a synthetic/recorded clip. Desktop wires it to the arm. See `challenge2/`.

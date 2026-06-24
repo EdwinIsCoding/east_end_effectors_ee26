@@ -46,8 +46,17 @@ def test_pi0_subtask_keys():
         assert k in cfg
 
 
+def test_pi0_c1_keys():
+    cfg = _load("pi0_c1.yaml")
+    assert cfg.get("model_type") == "pi0"
+    assert cfg.get("use_phase_conditioning") is False
+    assert "--freeze-vision-encoder" in cfg.get("extra_train_args", [])
+    for k in REQUIRED_KEYS:
+        assert k in cfg
+
+
 def test_all_dataset_paths_use_template():
-    for name in ["smolvla_baseline.yaml", "smolvla_fsm.yaml", "pi0_subtask.yaml"]:
+    for name in ["smolvla_baseline.yaml", "smolvla_fsm.yaml", "pi0_subtask.yaml", "pi0_c1.yaml"]:
         cfg = _load(name)
         path = cfg.get("dataset_path", "")
         assert "${dataset_name}" in path, f"{name}: dataset_path should use ${'{dataset_name}'} template"

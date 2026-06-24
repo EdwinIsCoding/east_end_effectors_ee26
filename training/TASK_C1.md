@@ -48,5 +48,10 @@ dims [8]/[8], normalization stats, and the canonical deploy prompt. Desktop depl
 `robot/franka_xr_teleop/tools/run_vla_policy.py` (apply output jitter for mm precision).
 
 ## Ceiling (later)
-- Pi0: `--model-type pi0` (LoRA) once SmolVLA data quality is proven.
-- OpenVINO export for the Pantherlake Intel bonus (PLAN_OFFROBOT O3).
+- **Pi0** once SmolVLA data quality is proven — memory-efficient single-5090 config:
+  ```bash
+  uv --project ../lerobot run python scripts/train_phase.py \
+      --config configs/training/pi0_c1.yaml --dataset-name c1_insertion
+  ```
+  (frozen vision encoder + expert-only + grad-checkpointing + bf16, batch 4; raise batch if VRAM allows.)
+- OpenVINO export for the Pantherlake Intel bonus — `src/inference/README.md` + `src/inference/openvino_runner.py`.

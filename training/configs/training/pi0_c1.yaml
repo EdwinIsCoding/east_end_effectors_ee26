@@ -1,0 +1,29 @@
+# Pi0 single-task C1 fine-tune — memory-efficient for ONE RTX 5090 (32 GB).
+# No phase/subtask conditioning (baseline ceiling model, run once SmolVLA data quality is proven).
+#
+# Invocation:
+#   python scripts/train_phase.py --config configs/training/pi0_c1.yaml --dataset-name c1_insertion
+#
+# Internally calls:
+#   main.py train --dataset-root lerobot_datasets/c1_insertion --model-type pi0 \
+#     --freeze-vision-encoder --train-expert-only --gradient-checkpointing --dtype bfloat16
+
+_base: configs/training/base.yaml
+
+model_type: pi0
+use_phase_conditioning: false
+
+# Pi0 (PaliGemma ~3B) is memory-heavy; start small and raise if VRAM allows.
+batch_size: 4
+
+dataset_path: "lerobot_datasets/${dataset_name}"
+output_dir: "outputs/${dataset_name}_pi0"
+
+# Frozen vision encoder + expert-only + grad checkpointing + bf16 keeps Pi0 on a single 5090.
+# (Freezing the pretrained encoder is also the cheap "fewer demos / faster convergence" win.)
+extra_train_args:
+  - "--freeze-vision-encoder"
+  - "--train-expert-only"
+  - "--gradient-checkpointing"
+  - "--dtype"
+  - "bfloat16"
