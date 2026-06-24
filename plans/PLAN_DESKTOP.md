@@ -23,6 +23,7 @@ Commit/push small and often; stay in your owner dirs; `CONTRACT.md` is frozen (p
 - [ ] Robot homes safely to start pose. **GATE.**
 
 ## D1 — Teleop (Quest)
+- [ ] **Wired setup → follow `robot/docs/QUEST_WIRED_SETUP.md`** (USB + `adb reverse 63901` → PC Service → bridge `--dry-run` → live). Milestones: A = dry-run logs controller data; B = live deadman teleop.
 - [ ] Install **XRoboToolkit PC Service**; pair Quest 3 → `xrobotics_source` → bridge. Tune `teleop.yaml`.
 - [ ] Verify keyboard fallback as insurance.
 - [ ] **GATE:** smooth deadman-anchored 6-DOF teleop + gripper.
