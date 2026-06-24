@@ -43,17 +43,30 @@ Organizer confirmed using our own control stack is **score-neutral**, and we hav
 3. FCI single-client: Desk OR external control, not both. Unlock joints + activate FCI in Desk (franka/frankaRSI).
 4. libfranka 0.9.x ↔ Panda firmware 4.2.x compatibility.
 
+## Status snapshot (updated 2026-06-24)
+**Off-robot (this Mac) is built out and waiting on data.** Desktop is still setting up hardware.
+- ✅ Repo scaffolded, two-machine split, frozen `CONTRACT.md`, pushed to `origin/main`.
+- ✅ Off-robot pipeline green: 110 tests (training 105 + challenge2 5) in the py3.12 venv (`~/Downloads/ee26_venv`).
+- ✅ **C1 training turn-key** (`training/TASK_C1.md`) + peg-in-hole annotate vocab + Pi0 single-5090 config.
+- ✅ **Intel-bonus runner** (`training/src/inference/openvino_runner.py`, `--self-test` PASS).
+- ✅ **C2 ball-balance stack** (`challenge2/`, PD-stabilizes-in-sim test) — Desktop wires `CommandSink` to the bridge.
+- ⏳ Blocked on Desktop: real teleop, demo collection, SmolVLA/Pi0 training, all deploy/eval.
+- Fix-on-arrival (flagged in code): `InferenceModel` obs/action shapes on Intel box; C2 tilt sign vs camera mount.
+
 ## Phases (40h) — parallelized across 2 on-site
-- **0. Bring-up (0–3h):** Black workstation; build bridge (`cmake … Release`) + franka-sanity-checks; FCI unlock; communication/RT check; both D405s enumerate; 5090 cu128 matmul. Gate: safe home + GPU green.
-- **1a. Teleop (2–6h):** Quest 3 → XRoboToolkit PC Service → `xrobotics_source` → bridge. Keyboard fallback as insurance.
-- **1b. C2 (3–10h):** tracker + PD in parallel (prototype in sim if commanding new controller), then plate-tilt on hardware.
-- **2. C1 demos (6–18h):** Quest-collect diverse insertion demos → `record_data_collection_session` → LeRobot. Diversity > volume; fixed prompt phrasing.
-- **3. SmolVLA loop (14–28h):** clean→convert→train (SmolVLA-Testing / physical-ai-studio)→deploy (run_vla_policy + jitter)→eval. Gate: non-trivial success.
-- **4. OpenVINO + Pi0 (24–36h):** export to Pantherlake (Intel bonus); ball tracker → OpenVINO; LoRA Pi0 if data good.
-- **5. Hardening (36–40h):** reliability runs, error-recovery rehearsal, scoring rehearsal, submission.
+- **0. Bring-up (0–3h):** Black workstation; build bridge (`cmake … Release`) + franka-sanity-checks; FCI unlock; communication/RT check; both D405s enumerate; 5090 cu128 matmul. Gate: safe home + GPU green. — ⏳ Desktop in progress.
+- **1a. Teleop (2–6h):** Quest 3 → XRoboToolkit PC Service → `xrobotics_source` → bridge. Keyboard fallback as insurance. — ⏳ Desktop.
+- **1b. C2 (3–10h):** ✅ tracker + PD + plate-tilt logic drafted & tested off-robot (`challenge2/`); ⏳ Desktop wires `CommandSink`, sign-calibrates, runs on hardware.
+- **2. C1 demos (6–18h):** Quest-collect diverse insertion demos → `record_data_collection_session` → LeRobot. Diversity > volume. — ⏳ Desktop (gates off-robot O2).
+- **3. SmolVLA loop (14–28h):** ✅ recipe + configs ready (`TASK_C1.md`); ⏳ runs once demos land (clean→convert→train→deploy+jitter→eval).
+- **4. OpenVINO + Pi0 (24–36h):** ✅ runner + `pi0_c1.yaml` ready; ⏳ export to Pantherlake (Intel bonus); ball tracker → OpenVINO; Pi0 if data good.
+- **5. Hardening (36–40h):** reliability runs, error-recovery rehearsal, scoring rehearsal, submission. — ⏳.
 
 ## Open items
-- [ ] FCI IP of the robot.
-- [ ] Confirm we're on the Black (RT) workstation for the bridge build.
-- [ ] C1 peg/hole geometry (chamfered entries help — control the print if possible).
+- [ ] **(Desktop)** Bring-up gate: bridge build, FCI unlock, RT/communication check, both D405s, 5090 cu128 matmul.
+- [ ] **(Desktop)** First teleop + a small diverse demo set → unblocks off-robot O2 (SmolVLA training).
+- [x] FCI IP of the robot — `192.168.2.200` (in `robot/franka_xr_teleop/configs/robot.yaml`).
+- [x] Control-stack decision — our libfranka bridge (score-neutral, dedicated arm). multipanda = sim sandbox only.
+- [ ] C1 peg/hole geometry (chamfered entries help — control the print if possible); refine annotate vocab with the real shape colour/name.
 - [ ] Intel bonus scope: does the C2 OpenVINO tracker count, or policy only? (ask organizer)
+- [ ] On arrival: verify `InferenceModel` obs/action shapes (Intel box) and C2 tilt sign (`tilt_to_pose(signs=…)`).
