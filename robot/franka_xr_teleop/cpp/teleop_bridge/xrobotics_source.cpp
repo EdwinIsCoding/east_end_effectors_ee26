@@ -2,9 +2,11 @@
 
 #include <PXREARobotSDK.h>
 
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -18,6 +20,17 @@ namespace teleop {
 namespace {
 
 using json = nlohmann::json;
+
+// Set XR_DEBUG_JSON=1 to dump the first few raw stateJson payloads from the
+// Quest app and log which parse branch drops a packet. Diagnostic only; off by
+// default so live teleop is unaffected.
+bool XrDebugEnabled() {
+  static const bool enabled = [] {
+    const char* v = std::getenv("XR_DEBUG_JSON");
+    return v != nullptr && v[0] != '\0' && v[0] != '0';
+  }();
+  return enabled;
+}
 
 bool ParsePoseString(const std::string& pose_str, Pose* out) {
   std::stringstream ss(pose_str);
@@ -138,39 +151,64 @@ void XrRoboticsSource::OnCallback(int type, int status, void* user_data) {
       return;
   }
 
-  if (user_data == nullptr) {
+  // Rate-limited drop logging: when XR_DEBUG_JSON is set, print the reason for
+  // the first few dropped packets so a schema mismatch is obvious.
+  auto drop = [this](const char* reason) {
+    if (XrDebugEnabled()) {
+      static std::atomic<int> logged{0};
+      if (logged.fetch_add(1, std::memory_order_relaxed) < 20) {
+        std::cerr << "[xr-debug] drop: " << reason << "\n";
+      }
+    }
     dropped_count_.fetch_add(1, std::memory_order_acq_rel);
+  };
+
+  if (user_data == nullptr) {
+    drop("user_data == nullptr");
     return;
   }
 
   const auto& state_json = *reinterpret_cast<PXREADevStateJson*>(user_data);
+
+  // Dump the first few raw payloads verbatim so we can read the app's actual
+  // schema and adapt the parser if it differs from what we expect.
+  if (XrDebugEnabled()) {
+    static std::atomic<int> dumps{0};
+    const int n = dumps.fetch_add(1, std::memory_order_relaxed);
+    if (n < 5) {
+      std::cerr << "[xr-debug] raw stateJson #" << n << ": "
+                << (state_json.stateJson != nullptr ? state_json.stateJson : "(null)")
+                << "\n";
+    }
+  }
+
   json root = json::parse(state_json.stateJson, nullptr, false);
   if (root.is_discarded() || !root.contains("value") || !root["value"].is_string()) {
-    dropped_count_.fetch_add(1, std::memory_order_acq_rel);
+    drop("root missing string 'value' (or unparseable)");
     return;
   }
 
   json value = json::parse(root["value"].get<std::string>(), nullptr, false);
   if (value.is_discarded() || !value.contains("Controller") || !value["Controller"].is_object()) {
-    dropped_count_.fetch_add(1, std::memory_order_acq_rel);
+    drop("value missing object 'Controller' (or unparseable)");
     return;
   }
 
   const auto& controller = value["Controller"];
   if (!controller.contains("right") || !controller["right"].is_object()) {
-    dropped_count_.fetch_add(1, std::memory_order_acq_rel);
+    drop("Controller missing object 'right'");
     return;
   }
 
   const auto& right = controller["right"];
   if (!right.contains("pose") || !right["pose"].is_string()) {
-    dropped_count_.fetch_add(1, std::memory_order_acq_rel);
+    drop("right missing string 'pose'");
     return;
   }
 
   XRCommand cmd{};
   if (!ParsePoseString(right["pose"].get<std::string>(), &cmd.right_controller_pose)) {
-    dropped_count_.fetch_add(1, std::memory_order_acq_rel);
+    drop("pose string failed to parse into 7 floats");
     return;
   }
 
