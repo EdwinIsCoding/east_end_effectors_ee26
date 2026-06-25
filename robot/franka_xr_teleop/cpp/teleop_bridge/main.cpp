@@ -235,12 +235,24 @@ int main(int argc, char** argv) {
   std::string resolved_config_dir = options.config_dir;
   if (!teleop::LoadAppConfig(options.config_dir, &config, &config_error)) {
     if (options.config_dir == "configs") {
-      const std::string fallback_config_dir = "franka_xr_teleop/configs";
-      if (!teleop::LoadAppConfig(fallback_config_dir, &config, &config_error)) {
+      // Default config dir not found relative to CWD; try known fallbacks so
+      // the bare command works whether launched from robot/ or the repo root.
+      const std::string fallback_config_dirs[] = {
+          "franka_xr_teleop/configs",
+          "robot/franka_xr_teleop/configs",
+      };
+      bool loaded = false;
+      for (const std::string& fallback_config_dir : fallback_config_dirs) {
+        if (teleop::LoadAppConfig(fallback_config_dir, &config, &config_error)) {
+          resolved_config_dir = fallback_config_dir;
+          loaded = true;
+          break;
+        }
+      }
+      if (!loaded) {
         std::cerr << "Config error: " << config_error << "\n";
         return 1;
       }
-      resolved_config_dir = fallback_config_dir;
     } else {
       std::cerr << "Config error: " << config_error << "\n";
       return 1;
