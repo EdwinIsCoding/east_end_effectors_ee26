@@ -27,10 +27,14 @@ Quest listed as `device`. If empty/`unauthorized`, see `robot/docs/QUEST3_CONNEC
 data-capable, no hubs; udev rule for vendor `2833`; revoke+retry authorizations).
 
 ## 3. Install the Quest client app (skip if already installed)
+⚠️ **No prebuilt Quest APK exists** — `XRoboToolkit-Unity-Client-Quest` ships as Unity source only.
+- **Preferred:** get the already-built `.apk` from the teammate who set up the Quest in the prior project.
+- **Fallback (slow):** build it in **Unity 2021.3.45f2** (exact; 2022.x crashes) + Meta XR Interaction SDK
+  72.0.0 + Oculus XR Plugin 3.4.1 + Android module — multi-hour, needs a Unity machine.
 ```bash
-adb install XRoboToolkit-Unity-Client-Quest.apk   # XR-Robotics releases, or the teammate's copy
+adb install <path-to>/XRoboToolkit-Unity-Client-Quest.apk
 ```
-Find it later in the headset App Library under the **"Unknown Sources"** filter.
+Then find it in the headset App Library under the **"Unknown Sources"** filter.
 
 ## 4. Build + install + start the PC Service  ← main blocker
 Build from source ([XRoboToolkit-PC-Service](https://github.com/XR-Robotics/XRoboToolkit-PC-Service)):
