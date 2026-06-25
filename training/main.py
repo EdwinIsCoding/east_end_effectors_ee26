@@ -534,6 +534,19 @@ def _cmd_train(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    # --- SageMaker entry adaptation --------------------------------------
+    # A remote SageMaker Training Job invokes the entry point as a flat
+    # `python main.py --config <yaml> --dataset-name <name> ...` (it turns the
+    # `hyperparameters` dict into `--key value` flags and CANNOT pass our
+    # positional `train` subcommand). This CLI otherwise requires a subcommand,
+    # so detect that flat `--config` form and delegate to the train_phase CLI,
+    # which already understands --config/--dataset-name and re-invokes
+    # `main.py train ...` as a subprocess with the proper subcommand.
+    if "--config" in sys.argv[1:]:
+        from src.cli.train_phase import app as train_phase_app
+        train_phase_app()
+        return
+    # ---------------------------------------------------------------------
     parser = argparse.ArgumentParser(
         prog="main.py",
         description="SmolVLA robot data pipeline — clean, label, convert, train.",

@@ -1,0 +1,50 @@
+# ---------------------------------------------------------------------------
+# training/requirements.txt
+#
+# Dependencies for running the LeRobot / Pi0 / SmolVLA training pipeline as a
+# REMOTE SageMaker Training Job (not the local `uv --project ../lerobot` flow).
+#
+# SageMaker behaviour: when `source_dir` (= this `training/` dir) contains a
+# `requirements.txt`, the PyTorch DLC runs `pip install -r requirements.txt`
+# INSIDE the container before invoking the entry point. So everything the
+# training code imports at runtime must be resolvable from here.
+#
+# Target container: AWS PyTorch 2.1 DLC, py310, CUDA (g5.2xlarge = A10G, sm_86 →
+# standard CUDA wheels work; the cu128/Blackwell special-case is ONLY for the
+# on-prem RTX 5090 and does NOT apply here).
+#
+# NOTE: the DLC already ships a CUDA-enabled torch/torchvision. We intentionally
+# do NOT pin torch here so pip keeps the container's GPU build. `lerobot` may try
+# to pull its own torch; if you hit a torch downgrade-to-CPU during the build,
+# add `--no-deps` handling or pin torch to the DLC version (see launch script
+# notes). Verify with the `--self-test`/smoke run before a long job.
+# ---------------------------------------------------------------------------
+
+# Core training stack — LeRobot with the Pi0 extra (PaliGemma + flow-matching).
+# Pinned to the same commit the on-prem env uses (CLAUDE.md: 05a52238) so remote
+# == local. Bump deliberately, not accidentally.
+lerobot[pi0] @ git+https://github.com/huggingface/lerobot.git@05a52238
+
+# Hugging Face hub access (pull lerobot/pi0_base, optional push_to_hub).
+huggingface_hub>=0.24
+
+# Experiment tracking — lerobot's train() can log to either of these.
+wandb>=0.17
+tensorboard>=2.14
+
+# Config / CLI libs used by main.py + src/cli/train_phase.py.
+pyyaml>=6.0
+typer>=0.12
+rich>=13.0
+hydra-core>=1.3
+
+# Numerics / model utilities pulled in by the training + policy code paths.
+numpy
+einops>=0.8
+transformers>=4.44
+accelerate>=0.33
+
+# Video / image decode for LeRobotDataset v3 mp4 frames (torchcodec backend).
+torchcodec
+imageio[ffmpeg]
+opencv-python-headless

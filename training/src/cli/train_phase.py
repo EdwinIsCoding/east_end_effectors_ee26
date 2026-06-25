@@ -15,7 +15,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -48,12 +47,13 @@ def _run_main_py_train(cfg: dict, dataset_name: str, output_dir: Path, smoke_tes
     model_type = cfg["model_type"]
     dataset_path = cfg["dataset_path"]
 
+    total_steps = 10 if smoke_test else int(cfg.get("steps", 20000))
     cmd = [
         sys.executable, str(_MAIN_PY), "train",
         "--dataset-root", dataset_path,
         "--model-type", model_type,
         "--output-dir", str(output_dir),
-        "--steps", "10" if smoke_test else str(cfg.get("steps", 20000)),
+        "--steps", str(total_steps),
         "--batch-size", str(cfg.get("batch_size", 8)),
         "--seed", str(cfg.get("seed", 1000)),
     ]
@@ -63,9 +63,13 @@ def _run_main_py_train(cfg: dict, dataset_name: str, output_dir: Path, smoke_tes
         cmd.append(arg)
 
     console.print(f"[cyan]Running: {' '.join(cmd)}[/cyan]")
-    result = subprocess.run(cmd, cwd=str(_ROOT))
-    if result.returncode != 0:
-        raise RuntimeError(f"main.py train exited with code {result.returncode}")
+    # Wrap the subprocess in the time-keeper: it streams lerobot's output through
+    # unchanged and prints an explicit [ETA] line (step/total, elapsed, s/step,
+    # remaining, projected finish) parsed from the training log.
+    from src.training.eta import stream_with_eta
+    returncode = stream_with_eta(cmd, cwd=str(_ROOT), total_steps=total_steps)
+    if returncode != 0:
+        raise RuntimeError(f"main.py train exited with code {returncode}")
 
 
 def _run_forked_smolvla_train(cfg: dict, dataset_name: str, output_dir: Path, smoke_test: bool,
