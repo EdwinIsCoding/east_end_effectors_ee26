@@ -244,31 +244,83 @@ class MockPolicy:
         return np.concatenate([state[:JOINT_ACTION_DIM], [0.0]])  # hold joints, gripper open
 
 
+# --- Profiling --------------------------------------------------------------
+class StageProfiler:
+    """Accumulates per-stage wall-times (ms) so we can confirm the loop fits its rate budget.
+
+    Stages: state (obs fetch), image (camera read), infer (policy), send (UDP). The dominant cost
+    on Pantherlake is `infer`; this is how we verify it (camera+infer+send) holds the control rate.
+    """
+
+    def __init__(self) -> None:
+        self.stages: dict[str, list[float]] = {}
+
+    def add(self, name: str, ms: float) -> None:
+        self.stages.setdefault(name, []).append(ms)
+
+    def summary(self, sent: int, wall_s: float) -> str:
+        lines = ["[profile] per-stage latency (ms):"]
+        for name in ("state", "image", "infer", "send"):
+            vals = self.stages.get(name)
+            if not vals:
+                continue
+            a = np.asarray(vals)
+            lines.append(f"  {name:<6} p50={np.percentile(a, 50):6.2f} p95={np.percentile(a, 95):6.2f} "
+                         f"p99={np.percentile(a, 99):6.2f}  (n={a.size})")
+        hz = sent / wall_s if wall_s > 0 else 0.0
+        lines.append(f"  loop:  {sent} steps in {wall_s:.2f}s -> {hz:.1f} Hz effective")
+        return "\n".join(lines)
+
+
 # --- Main loop --------------------------------------------------------------
 def run_loop(state_source, image_source, policy, sender: ActionSender, prompt: str,
-             rate_hz: float, jitter_std: float, max_steps: Optional[int] = None) -> int:
-    """Assemble obs → select_action → clamp → (optional jitter) → send, at rate_hz. Returns steps sent."""
+             rate_hz: float, jitter_std: float, max_steps: Optional[int] = None,
+             profile: bool = False, report_every: int = 0) -> int:
+    """Assemble obs → select_action → clamp → (optional jitter) → send, at rate_hz. Returns steps sent.
+
+    With profile=True, per-stage latencies are collected and a summary is printed on exit (and every
+    `report_every` steps if >0). Profiling overhead is a few perf_counter calls — negligible at 30 Hz.
+    """
     period = 1.0 / rate_hz
     rng = np.random.default_rng(0)
     policy.reset()
+    prof = StageProfiler() if profile else None
+    clock = time.perf_counter
     seq, sent = 0, 0
+    wall_start = clock()
     while max_steps is None or sent < max_steps:
         loop_start = time.monotonic()
+        t = clock()
         robot_state = state_source()
         if robot_state is None:
             time.sleep(period)
             continue
+        if prof is not None:
+            prof.add("state", (clock() - t) * 1e3)
         state = state_vector(robot_state)
+        t = clock()
         images = image_source()
+        if prof is not None:
+            prof.add("image", (clock() - t) * 1e3)
+        t = clock()
         action = policy.select_action(build_policy_obs(state, images, prompt))
+        if prof is not None:
+            prof.add("infer", (clock() - t) * 1e3)
         joints, gripper = clamp_action(action)
         if jitter_std > 0.0:  # report's controlled-jitter trick for mm-precision insertion
             joints = joints + rng.normal(0.0, jitter_std, size=JOINT_ACTION_DIM)
             joints, _ = clamp_action(np.concatenate([joints, [gripper]]))
+        t = clock()
         sender.send(build_action_message(seq, joints, gripper))
+        if prof is not None:
+            prof.add("send", (clock() - t) * 1e3)
         seq += 1
         sent += 1
+        if prof is not None and report_every > 0 and sent % report_every == 0:
+            print(prof.summary(sent, clock() - wall_start))
         time.sleep(max(0.0, period - (time.monotonic() - loop_start)))
+    if prof is not None:
+        print(prof.summary(sent, clock() - wall_start))
     return sent
 
 
@@ -322,6 +374,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--obs-bind-ip", type=str, default="0.0.0.0")
     p.add_argument("--obs-port", type=int, default=DEFAULT_OBS_PORT)
     p.add_argument("--rate", type=float, default=30.0, help="Control rate (Hz).")
+    p.add_argument("--profile", action="store_true",
+                   help="Collect per-stage latency (state/image/infer/send) and print a summary on exit.")
+    p.add_argument("--report-every", type=int, default=0,
+                   help="With --profile, also print a rolling summary every N steps (0=only at exit).")
     p.add_argument("--jitter-std", type=float, default=0.0, help="Gaussian joint jitter (rad) for mm precision.")
     p.add_argument("--camera-config", type=str, default=None,
                    help="Path to data_collection.yaml for camera serials "
@@ -365,7 +421,8 @@ def main() -> int:
 
     try:
         sent = run_loop(state_source, image_source, policy, sender, args.prompt,
-                        args.rate, args.jitter_std, args.max_steps)
+                        args.rate, args.jitter_std, args.max_steps,
+                        profile=args.profile, report_every=args.report_every)
         print(f"sent {sent} actions")
     finally:
         sender.close()

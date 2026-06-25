@@ -84,3 +84,28 @@ def test_load_camera_serials_falls_back_when_missing():
     serials = ovr.load_camera_serials("/nonexistent/data_collection.yaml")
     assert serials[ovr.WRIST_IMAGE_KEY] == ovr.WRIST_SERIAL
     assert serials[ovr.EXTERNAL_IMAGE_KEY] == ovr.EXTERNAL_SERIAL
+
+
+def test_stage_profiler_reports_stages_and_hz():
+    prof = ovr.StageProfiler()
+    for _ in range(5):
+        prof.add("infer", 4.0)
+        prof.add("image", 1.0)
+    out = prof.summary(sent=5, wall_s=1.0)
+    assert "infer" in out and "image" in out
+    assert "5.0 Hz effective" in out  # 5 steps / 1.0 s
+
+
+def test_run_loop_profile_does_not_change_step_count(capsys):
+    import socket
+    rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    rx.bind(("127.0.0.1", 0))
+    sender = ovr.ActionSender("127.0.0.1", rx.getsockname()[1])
+    hold = {"q": [0.0] * 7, "gripper_width": 0.04}
+    img = {ovr.WRIST_IMAGE_KEY: None, ovr.EXTERNAL_IMAGE_KEY: None}
+    sent = ovr.run_loop(lambda: hold, lambda: img, ovr.MockPolicy(), sender,
+                        "x", rate_hz=500.0, jitter_std=0.0, max_steps=4, profile=True)
+    sender.close()
+    rx.close()
+    assert sent == 4
+    assert "[profile] per-stage latency" in capsys.readouterr().out
