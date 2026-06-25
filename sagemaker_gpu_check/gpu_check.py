@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-gpu_check.py — runs INSIDE an ephemeral SageMaker ml.g5.2xlarge training job.
+gpu_check.py — runs INSIDE an ephemeral SageMaker ml.g6e.xlarge training job.
 
-It does the minimum to answer "can my code actually see and use the A10G GPU?":
+It does the minimum to answer "can my code actually see and use the L40S GPU?":
   1. nvidia-smi (driver + GPU visible to the container)
   2. torch.cuda.is_available() / device name / capability
   3. a real CUDA matmul (proves compute + memory work, not just detection)

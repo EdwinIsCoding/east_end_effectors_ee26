@@ -7,10 +7,10 @@ WHY THIS EXISTS
 Our AWS account blocks interactive GPU Studio apps (quota 0). So we run this
 script FROM the cheap CPU workspace (ml.t3.medium). It does NOT train anything
 locally. It packages `training/`, uploads it to S3, and asks SageMaker to spin
-up a dedicated `ml.g5.2xlarge` (1x NVIDIA A10G, 24 GB), run our pipeline on that
+up a dedicated `ml.g6e.xlarge` (1x NVIDIA L40S, 48 GB), run our pipeline on that
 GPU, copy the checkpoints back to S3, and tear the instance down automatically.
 
-   [ml.t3.medium control plane]  --(boto3/sagemaker)-->  [ephemeral ml.g5.2xlarge]
+   [ml.t3.medium control plane]  --(boto3/sagemaker)-->  [ephemeral ml.g6e.xlarge]
         this script                                         runs training/main.py
 
 HOW SAGEMAKER SHIFTS PATHS INSIDE THE CONTAINER (read this before debugging)
@@ -50,7 +50,7 @@ from sagemaker.pytorch import PyTorch
 
 def build_estimator(
     *,
-    instance_type: str = "ml.g5.2xlarge",
+    instance_type: str = "ml.g6e.xlarge",
     instance_count: int = 1,
     config: str = "configs/training/pi0_c1.yaml",
     dataset_name: str = "c1_insertion",
@@ -116,7 +116,7 @@ def build_estimator(
                                         #   its requirements.txt is auto pip-installed first.
         role=role,
         instance_count=instance_count,
-        instance_type=instance_type,    # ml.g5.2xlarge = 1x A10G 24 GB
+        instance_type=instance_type,    # ml.g6e.xlarge = 1x L40S 48 GB
 
         # Modern PyTorch DLC. py310 matches our local 3.10/3.13-ish CPython usage
         # closely enough for the pure-python training code.
@@ -132,7 +132,7 @@ def build_estimator(
         output_path=output_path,
         sagemaker_session=sm_session,
 
-        # Stop run-away spend: cap wall-clock. g5.2xlarge bills per second.
+        # Stop run-away spend: cap wall-clock. g6e.xlarge bills per second.
         max_run=max_run_seconds,
 
         # Optional managed-spot to cut cost ~70% on a hackathon budget.
@@ -159,7 +159,7 @@ def main() -> None:
     ap.add_argument("--dataset-s3-uri", default=None,
                     help="S3 URI of the exported LeRobotDataset v3. Mounted at "
                          "/opt/ml/input/data/training (SM_CHANNEL_TRAINING) if set.")
-    ap.add_argument("--instance-type", default="ml.g5.2xlarge")
+    ap.add_argument("--instance-type", default="ml.g6e.xlarge")
     ap.add_argument("--output-path", default=None,
                     help="S3 prefix for artifacts. Defaults to the session's default bucket.")
     ap.add_argument("--use-spot", action="store_true", help="Use managed spot instances.")

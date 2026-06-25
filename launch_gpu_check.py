@@ -3,12 +3,12 @@
 launch_gpu_check.py — fire a tiny, cheap ephemeral GPU smoke-test job.
 
 Run this FROM the ml.t3.medium workspace BEFORE the real training job, to confirm:
-  (a) your account actually has training-job quota for ml.g5.2xlarge (separate
+  (a) your account actually has training-job quota for ml.g6e.xlarge (separate
       from the blocked interactive/Studio GPU quota), and
   (b) CUDA / torch / bf16 work inside the DLC container.
 
-It spins up one ml.g5.2xlarge, runs sagemaker_gpu_check/gpu_check.py, streams the
-logs back here, then tears the instance down. Costs ~a few minutes of g5 time.
+It spins up one ml.g6e.xlarge, runs sagemaker_gpu_check/gpu_check.py, streams the
+logs back here, then tears the instance down. Costs ~a few minutes of g6e time.
 
     python launch_gpu_check.py
 """
@@ -42,7 +42,7 @@ def main() -> None:
         source_dir="sagemaker_gpu_check",
         role=role,
         instance_count=1,
-        instance_type="ml.g5.2xlarge",     # 1x A10G, 24 GB
+        instance_type="ml.g6e.xlarge",     # 1x L40S, 48 GB
         framework_version="2.1.0",
         py_version="py310",
         sagemaker_session=sm_session,
@@ -53,11 +53,11 @@ def main() -> None:
     )
 
     job_name = f"ee26-gpu-check-{int(time.time())}"
-    print(f"[check] launching {job_name} on ml.g5.2xlarge ...")
+    print(f"[check] launching {job_name} on ml.g6e.xlarge ...")
     # wait=True streams the container's stdout (nvidia-smi, CUDA results) to this
     # console. If the job ends "Completed" -> GPU works. "Failed" with our exit 2
     # -> the instance had no usable GPU. A ResourceLimitExceeded at submit time
-    # -> you have no g5.2xlarge TRAINING quota (request an increase in Service Quotas).
+    # -> you have no g6e.xlarge TRAINING quota (request an increase in Service Quotas).
     estimator.fit(job_name=job_name, wait=True)
     print(f"[check] done. proof artifact (gpu_check_ok.txt) at: {estimator.model_data}")
 
