@@ -59,7 +59,47 @@ python -c "import torch; print(torch.__version__, torch.cuda.is_available(), tor
 
 **Still pending:**
 - **GPU cu128:** reboot into `6.8.0-124-generic` (recipe above), then validate.
-- **Live teleop (D1):** start the PC Service (`/opt/apps/roboticsservice/runService.sh`) + pair Quest 3.
+
+## ✅ Live teleop (D1) bring-up — Quest 3 → bridge → robot (WORKING 2026-06-25)
+Full ADB/connection detail in `robot/docs/QUEST3_CONNECTION.md`. End-to-end sequence that worked:
+
+**1. Quest USB/ADB (headset awake + worn, USB direct port, data cable):**
+```bash
+adb kill-server && adb start-server && adb devices -l   # want state "device"
+```
+- `unauthorized` → accept **Allow USB debugging** in-headset (check *Always allow*). If the prompt never sticks: `rm -f ~/.android/adbkey*` then restart server to force a fresh prompt; if still stuck, on-headset *Revoke USB debugging authorizations* + toggle USB debugging off/on.
+- empty list / no `lsusb -d 2833:5013` → headset asleep or cable/port issue (use a **direct USB3 port**, data cable).
+
+**2. Reverse tunnel (must re-add every time the headset reconnects):**
+```bash
+adb reverse --remove-all && adb reverse tcp:63901 tcp:63901 && adb reverse --list
+```
+
+**3. Service + Unity (one script launches both — `RoboticsServiceProcess` + `RobotLinuxDemo.x86_64`):**
+```bash
+cd /opt/apps/roboticsservice && ./run3D.sh    # 63901 should LISTEN; runService.sh = service only, no Unity
+```
+
+**4. Robot must be at home & contact-free BEFORE the bridge** (see reflex gotcha below), then:
+```bash
+cd robot/franka_xr_teleop && ./build/cpp/teleop_bridge/franka_xr_teleop_bridge --robot-ip 192.168.1.11 --obs-port 28081
+```
+Healthy log: `Gripper ready …`, `control_command_success_rate≈0.97-1`, `q_err_max≈0.002` (holding home). In the Quest app connect to `127.0.0.1`; engage the clutch with controllers near the arm pose.
+
+**⚠️ `cartesian_reflex` on bridge start / during homing:** if the bridge's first teleop target jumps (controllers not aligned) the robot trips `["cartesian_reflex"]` and the bridge exits, leaving the arm in **Reflex** mode (and any commanded move then rejected). Recover + re-home, in order:
+```bash
+cd robot/franka-sanity-checks
+./build/panda_libfranka_sanity --robot-ip 192.168.1.11 --mode recover-only   # Reflex→Idle (automaticErrorRecovery)
+./build/move_to_home 192.168.1.11                                            # slow 6 s quintic to q_home
+```
+- `"User stopped"` rejection → physical user-stop is pressed; release it, then recover again.
+- Homing itself trips `cartesian_reflex` mid-move with `cartesian_collision:[…,2,…]` + steady `O_F_ext_hat_K` Z (~5 N) → the **gripper is in contact** (table/plate/cable). Guiding is envelope-capped right at the contact so you can't hand-pull it free. Break contact with a commanded lift (base-frame +Z, away from a downward contact), then recover + home:
+```bash
+./build/panda_libfranka_sanity --robot-ip 192.168.1.11 --mode tiny-cartesian --cart-axis z --delta-m 0.02 --duration-s 10
+```
+  (tiny-cartesian shifts `O_T_EE` translation in the **base frame**; min 8 s, ≤0.05 m, ≤0.01 m/s.)
+
+**🔁 Headset sleeps / "connect error" / timeout in the app:** taking the headset off drops the USB→ADB link, which kills the reverse tunnel — the bridge, service, and robot keep running. Fix is just: **wake/wear the headset, then redo steps 1–2** (`adb kill-server && adb start-server`; re-add `adb reverse tcp:63901 tcp:63901`) and reconnect the app to `127.0.0.1`. Do **not** restart the bridge or re-home.
 
 ## Repo map
 | Path | What |
