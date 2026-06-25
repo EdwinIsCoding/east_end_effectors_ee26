@@ -113,17 +113,20 @@ Validated end-to-end on a 2-episode session. **Operator playbook (20×20 cadence
 root). Full detail in memory `ee26-data-collection-workflow.md`; recording format/layout in
 `robot/franka_xr_teleop/DATA_COLLECTION.md`.
 
-**Capture.** Bridge running (holds home; `--obs-port 28081`), then in `~/ee26_cam_venv`:
+**Capture — use the single launcher** (`tools/start_collection_session.sh`), which guarantees the bridge
+is up AND the recorder is *verified capturing* before you collect, so you can't teleop into the void:
 ```bash
 cd robot/franka_xr_teleop
-./tools/record_data_collection_session.py --reset-cameras --recording-id <session_id>
+./tools/start_collection_session.sh <session_id>
 ```
-Records `robot.jsonl` (~50 Hz) + both D405 `cameras/<name>/rgb.mp4`. **A = episode start; B = episode
-end + rehome + gripper opens; left-controller X = discard** the current episode (rehomes like B, but the
-A→X span is dropped — never becomes an episode). Markers ride the obs stream → `episode_events.jsonl`. Ctrl-C / SIGTERM
-stops and **auto-splits** the session into `episodes/episode_NNN/` (joints + both camera clips).
-⚠️ **The recorder must be running BEFORE you press A** — the bridge only UDP-streams obs, it does not
-save; with nothing recording, A/B episodes are lost.
+It reuses a running bridge (starts one only if none is up), resets cameras, then **blocks until it
+confirms `robot.jsonl` + both D405 frame logs are growing — printing `CAPTURE LIVE`. Wait for that
+line before pressing A.** Records `robot.jsonl` (~50 Hz) + both `cameras/<name>/rgb.mp4`. **A = episode
+start; B = episode end + rehome + gripper opens; left-controller X = discard** (rehomes like B, but the
+A→X span never becomes an episode). Ctrl-C stops + **auto-splits** into `episodes/episode_NNN/` and leaves
+the bridge up for the next batch. (Manual fallback: `./tools/record_data_collection_session.py
+--reset-cameras --recording-id <id>` — but then YOU must ensure it's running before A; the bridge only
+UDP-streams obs and does not save, so with nothing recording the A/B episodes are lost.)
 
 **Data lives in 3 stages (all gitignored):**
 | Stage | Path | What |
@@ -165,7 +168,7 @@ the VS Code snap XDG redirect that would dangle on updates. Recipe: `robot/frank
 ## Repo map
 | Path | What |
 |---|---|
-| `robot/franka_xr_teleop/` | libfranka bridge (C++), teleop, recorders, `tools/record_data_collection_session.py` + `tools/split_session_episodes.py` + `tools/process_recording.sh` (record → split → clean+convert), `tools/run_vla_policy.py` deploy; `DATA_COLLECTION.md` |
+| `robot/franka_xr_teleop/` | libfranka bridge (C++), teleop, recorders, `tools/start_collection_session.sh` (bridge+recorder+verify-capture launcher) + `tools/record_data_collection_session.py` + `tools/split_session_episodes.py` + `tools/process_recording.sh` (record → split → clean+convert), `tools/run_vla_policy.py` deploy; `DATA_COLLECTION.md` |
 | `robot/franka-sanity-checks/` | gripper / safe-translate hardware checks |
 | `training/` | SmolVLA-Testing pipeline (clean/annotate/convert/train/eval); `main.py` CLI |
 | `training/TASK_C1.md` | turn-key C1 record→…→train recipe (run on Desktop) |

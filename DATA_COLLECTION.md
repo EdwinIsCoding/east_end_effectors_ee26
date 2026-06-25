@@ -39,14 +39,31 @@ record batch01 (20 eps) ──► Ctrl-C ──► convert batch01 (bg) ─┐
 
 ## Recording a batch
 
-The recorder must be running **before** you press A — the bridge only streams obs, it does not save.
-**Only one camera consumer at a time** (kill any `live_camera_view.py` first).
+⚠️ **The bridge does not save anything** — it only streams observations over UDP. If you teleop
+without the recorder running, every A/B episode is **lost silently**. To make that impossible, use the
+**single launcher** below: it guarantees a healthy bridge AND a recorder that is *verified to be
+capturing* before it tells you to start, and aborts loudly if capture isn't live.
 
 ```bash
 cd robot/franka_xr_teleop
+./tools/start_collection_session.sh batch01
+```
+
+It reuses the already-running bridge (starts one only if none is up), resets the cameras, then blocks
+until it confirms `robot.jsonl` is growing **and** both D405 cameras are writing frames — printing
+`CAPTURE LIVE` only once it's real. **Wait for that line before you press A.** Ctrl-C stops the recorder
+(auto-splits the session) and leaves the bridge up for the next batch.
+
+<details><summary>Manual fallback (only if the launcher can't be used)</summary>
+
+The recorder must be running **before** you press A, and **only one camera consumer at a time**
+(kill any `live_camera_view.py` first):
+
+```bash
 source ~/ee26_cam_venv/bin/activate
 ./tools/record_data_collection_session.py --reset-cameras --recording-id batch01
 ```
+</details>
 
 Controller buttons (markers ride the obs stream → `episode_events.jsonl`):
 
