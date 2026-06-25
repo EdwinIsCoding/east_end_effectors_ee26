@@ -136,9 +136,12 @@ def annotate(frame: np.ndarray, info: dict[str, Any]) -> np.ndarray:
         text(f"sn {info['serial']}  {info.get('res', '')}", (12, 46), 0.45, dim)
 
     live = info.get("live", False)
-    badge = f"{'LIVE' if live else 'STALE'}  {info.get('fps', 0):.0f} fps"
+    synthetic = info.get("synthetic", False)
+    state = "SYNTH" if synthetic else ("LIVE" if live else "STALE")
+    badge = f"{state}  {info.get('fps', 0):.0f} fps"
+    badge_color = (90, 170, 230) if synthetic else (green if live else red)  # amber-ish for synth
     (tw, _), _ = cv2.getTextSize(badge, font, 0.5, 1)
-    text(badge, (w - tw - 12, 26), 0.5, green if live else red)
+    text(badge, (w - tw - 12, 26), 0.5, badge_color)
 
     # bottom telemetry strip
     cv2.rectangle(frame, (0, h - 34), (w, h), (0, 0, 0), -1)
@@ -214,7 +217,8 @@ class CameraManager:
         info.setdefault("serial", cam.get("serial") if cam else "")
         info.setdefault("res", f"{frame.shape[1]}x{frame.shape[0]}")
         info["live"] = live
-        info["fps"] = fps
+        info["fps"] = fps if not (self.synthetic or camera_id not in self._feeds) else self._fps
+        info["synthetic"] = self.synthetic or camera_id not in self._feeds
         annotate(frame, info)
         ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
         return buf.tobytes() if ok else None

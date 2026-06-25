@@ -111,6 +111,16 @@ class TelemetryHub:
         span = self._arrivals[-1] - self._arrivals[0]
         return (len(self._arrivals) - 1) / span if span > 0 else 0.0
 
+    def overlay_info(self) -> dict[str, Any]:
+        """Small dict for per-frame camera overlays (no series copy — cheap at video rates)."""
+        with self._lock:
+            if not self._records:
+                return {"episode": "no data", "control_mode": "", "gripper": 0.0}
+            r = self._records[-1]
+            episode = f"REC {self.episode_count:02d}" if self.episode_active else "idle"
+            return {"episode": episode, "control_mode": r["control_mode"],
+                    "gripper": r["gripper_width"]}
+
     def snapshot(self, now: Optional[float] = None) -> dict[str, Any]:
         now = time.monotonic() if now is None else now
         with self._lock:

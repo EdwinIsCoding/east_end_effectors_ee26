@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EE26 · Operator Console</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='console.css') }}">
+</head>
+<body>
+  <header>
+    <div class="hd-cell">
+      <span class="hd-brand">EE26</span>
+      <span class="hd-sub">operator console</span>
+    </div>
+    <div class="hd-fill">
+      <span class="pill"><span id="conn-dot" class="dot"></span><span id="conn-label">connecting</span></span>
+      <span class="pill" id="source-pill">source —</span>
+      <div class="stat"><span class="k">rate</span><span class="v tnum" id="rate">— Hz</span></div>
+      <div class="stat"><span class="k">samples</span><span class="v tnum" id="samples">—</span></div>
+      <div class="stat"><span class="k">episode</span><span class="v" id="episode">—</span></div>
+    </div>
+    <div class="hd-cell hd-right">
+      <div class="stat" style="align-items:flex-end"><span class="k">clock</span>
+        <span class="v tnum" id="clock">—</span></div>
+    </div>
+  </header>
+
+  <main>
+    <section class="col col-cameras">
+      {% for cam in cameras %}
+      <div class="cam">
+        <div class="cam-head">
+          <span class="cam-title">{{ cam.label }}</span>
+          <span class="cam-title">{{ cam.obs_key }}</span>
+        </div>
+        <div class="cam-body">
+          <img src="{{ url_for('camera_mjpg', camera_id=cam.id) }}" alt="{{ cam.label }}">
+        </div>
+      </div>
+      {% endfor %}
+    </section>
+
+    <section class="col col-telemetry">
+      <div class="panel">
+        <div class="panel-head"><span class="t">live telemetry</span><span class="m" id="tele-meta">awaiting frames</span></div>
+        <div id="joints"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><span class="t">gripper · pose</span><span class="m" id="mode-meta">—</span></div>
+        <div class="kv">
+          <div><div class="k">gripper width</div><div class="v tnum" id="grip">— mm</div>
+            <div class="gripper-bar"><span id="grip-bar"></span></div></div>
+          <div><div class="k">gripper state</div><div class="v" id="grip-state">—</div></div>
+          <div><div class="k">tcp xyz (m)</div><div class="v tnum" id="tcp">—</div></div>
+          <div><div class="k">manipulability</div><div class="v tnum" id="manip">—</div></div>
+          <div><div class="k">control mode</div><div class="v" id="cmode">—</div></div>
+          <div><div class="k">teleop</div><div class="v" id="teleop">—</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><span class="t">faults</span><span class="m" id="fault-meta">nominal</span></div>
+        <div class="faults" id="faults"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>window.OBS_PORT_LABEL = "udp:28081";</script>
+  <script src="{{ url_for('static', filename='console.js') }}"></script>
+</body>
+</html>
