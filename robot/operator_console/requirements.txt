@@ -1,0 +1,10 @@
+# EE26 operator console deps. Create a venv with system site-packages so the Desktop's
+# pyrealsense2 is visible for live D405 feeds:
+#   python3 -m venv --system-site-packages ~/ee26_console_venv
+#   ~/ee26_console_venv/bin/pip install -r robot/operator_console/requirements.txt
+flask>=3.0
+opencv-python-headless>=4.8
+pyyaml>=5.4
+numpy>=1.21
+# pyrealsense2 is only needed for live cameras (already present on the Desktop). Without it,
+# or with --synthetic-cameras, the console serves synthetic placeholder feeds.
