@@ -245,8 +245,10 @@ def main() -> int:
     last_packet_mono: Optional[float] = None
     last_episode_start_robot_timestamp: Optional[int] = None
     last_episode_end_robot_timestamp: Optional[int] = None
+    last_episode_discard_robot_timestamp: Optional[int] = None
     last_episode_start = False
     last_episode_end = False
+    last_episode_discard = False
     progress_period_s = 1.0 / args.print_hz if args.print_hz > 0.0 else 0.0
     flush_every = max(args.flush_every, 1)
 
@@ -296,6 +298,7 @@ def main() -> int:
                 robot_timestamp = safe_get(obs, "timestamp_ns")
                 episode_start = bool(safe_get(obs, "status", "episode_start", default=False))
                 episode_end = bool(safe_get(obs, "status", "episode_end", default=False))
+                episode_discard = bool(safe_get(obs, "status", "episode_discard", default=False))
                 if (
                     episode_start
                     and not last_episode_start
@@ -314,8 +317,18 @@ def main() -> int:
                     episode_out.write(json.dumps(episode, separators=(",", ":"), sort_keys=True) + "\n")
                     if isinstance(robot_timestamp, int):
                         last_episode_end_robot_timestamp = robot_timestamp
+                if (
+                    episode_discard
+                    and not last_episode_discard
+                    and robot_timestamp != last_episode_discard_robot_timestamp
+                ):
+                    episode = make_episode_event("episode_discard", obs, addr, count)
+                    episode_out.write(json.dumps(episode, separators=(",", ":"), sort_keys=True) + "\n")
+                    if isinstance(robot_timestamp, int):
+                        last_episode_discard_robot_timestamp = robot_timestamp
                 last_episode_start = episode_start
                 last_episode_end = episode_end
+                last_episode_discard = episode_discard
                 count += 1
 
             if count > 0 and count % flush_every == 0:

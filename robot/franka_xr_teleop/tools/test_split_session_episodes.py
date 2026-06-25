@@ -189,6 +189,22 @@ def test_clip_extraction_when_cv2_present():
         print(f"[ok] clip_extraction: {written} frames clipped")
 
 
+def test_episode_discard_drops_span():
+    """A,B,A,DISCARD,A,B -> 2 episodes; the discarded middle span is dropped."""
+    evs = [
+        {"event": "episode_start", "robot_timestamp_ns": 1000, "packet_index": 1},
+        {"event": "episode_end", "robot_timestamp_ns": 2000, "packet_index": 2},
+        {"event": "episode_start", "robot_timestamp_ns": 3000, "packet_index": 3},
+        {"event": "episode_discard", "robot_timestamp_ns": 3500, "packet_index": 4},
+        {"event": "episode_start", "robot_timestamp_ns": 4000, "packet_index": 5},
+        {"event": "episode_end", "robot_timestamp_ns": 5000, "packet_index": 6},
+    ]
+    eps = ss.pair_episodes(evs, fallback_end_ns=None, allow_open_end=False, warn=lambda m: None)
+    wins = [(e["start"]["robot_timestamp_ns"], e["end_ns"]) for e in eps]
+    assert wins == [(1000, 2000), (4000, 5000)], wins
+    print("[ok] episode_discard_drops_span:", wins)
+
+
 def test_udp_recorder_to_split_end_to_end():
     """Simulate the bridge: UDP observations with episode_start/end -> events -> split."""
     recorder = Path(__file__).resolve().parent / "record_robot_observations.py"
@@ -274,6 +290,7 @@ def _run_all() -> int:
         test_pairing_and_windows,
         test_index_and_meta_written,
         test_open_end_handling,
+        test_episode_discard_drops_span,
         test_clip_extraction_when_cv2_present,
         test_udp_recorder_to_split_end_to_end,
     ]

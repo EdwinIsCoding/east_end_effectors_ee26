@@ -749,8 +749,10 @@ void PlannerLoop(const TeleopBridgeConfig& config,
     const bool use_a_button_for_episode_markers = !config.teleop.a_button_toggles_robot_control;
     bool last_button_a = false;
     bool last_button_b = false;
+    bool last_button_discard = false;
     uint64_t episode_start_marker_until_ns = 0;
     uint64_t episode_end_marker_until_ns = 0;
+    uint64_t episode_discard_marker_until_ns = 0;
     bool has_recent_target = false;
     uint64_t last_valid_target_ns = 0;
     std::array<double, 7> last_valid_target_q{};
@@ -937,12 +939,28 @@ void PlannerLoop(const TeleopBridgeConfig& config,
           requested_rehome_request_id->store(completed_id + 1, std::memory_order_release);
         }
       }
+      const bool button_discard = inputs.xr_stream_healthy ? xr_cmd.button_discard : false;
+      if (!policy_control && button_discard && !last_button_discard) {
+        // Left-controller X: discard the current episode. Emit a discard marker
+        // (segmentation drops the open A->discard span) and rehome like B.
+        episode_discard_marker_until_ns = now_ns + kEpisodeMarkerNs;
+        const uint64_t requested_id =
+            requested_rehome_request_id->load(std::memory_order_acquire);
+        const uint64_t completed_id =
+            completed_rehome_request_id->load(std::memory_order_acquire);
+        if (requested_id <= completed_id) {
+          requested_rehome_request_id->store(completed_id + 1, std::memory_order_release);
+        }
+      }
       planned.episode_start =
           episode_start_marker_until_ns != 0 && now_ns <= episode_start_marker_until_ns;
       planned.episode_end =
           episode_end_marker_until_ns != 0 && now_ns <= episode_end_marker_until_ns;
+      planned.episode_discard =
+          episode_discard_marker_until_ns != 0 && now_ns <= episode_discard_marker_until_ns;
       last_button_a = button_a;
       last_button_b = button_b;
+      last_button_discard = button_discard;
       const uint64_t requested_rehome_id =
           requested_rehome_request_id->load(std::memory_order_acquire);
       const uint64_t completed_rehome_id = completed_rehome_id_snapshot;
@@ -1758,6 +1776,7 @@ int FrankaTeleopController::Run(std::atomic<bool>* stop_requested) {
           obs.teleop_active = planned.teleop_active;
           obs.episode_start = planned.episode_start;
           obs.episode_end = planned.episode_end;
+          obs.episode_discard = planned.episode_discard;
           obs.target_manipulability = planned.manipulability;
           obs.faults = planned.faults;
           obs.faults.robot_not_ready = obs.faults.robot_not_ready || !robot_snapshot.robot_ok;

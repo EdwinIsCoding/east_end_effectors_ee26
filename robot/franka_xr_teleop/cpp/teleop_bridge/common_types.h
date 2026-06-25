@@ -145,6 +145,7 @@ struct XRCommand {
   bool button_a = false;
   bool button_b = false;
   bool right_axis_click = false;
+  bool button_discard = false;  // left-controller X: discard the current episode
 };
 
 struct TeleopAction {
@@ -199,6 +200,7 @@ struct PlannedTarget {
   bool target_fresh = false;
   bool episode_start = false;
   bool episode_end = false;
+  bool episode_discard = false;
   double manipulability = 0.0;
   TeleopAction requested_action{};
   TeleopState teleop_state = TeleopState::kDisconnected;
@@ -225,6 +227,7 @@ struct RobotObservation {
   bool teleop_active = false;
   bool episode_start = false;
   bool episode_end = false;
+  bool episode_discard = false;
   double target_manipulability = 0.0;
   FaultFlags faults{};
 };

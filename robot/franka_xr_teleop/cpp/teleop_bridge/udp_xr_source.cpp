@@ -69,6 +69,7 @@ bool ParseXrCommand(const std::string& payload,
   cmd.button_a = root.value("button_a", false);
   cmd.button_b = root.value("button_b", false);
   cmd.right_axis_click = root.value("axis_click", false);
+  cmd.button_discard = root.value("button_discard", false);
 
   if (!std::isfinite(cmd.control_trigger_value) || !std::isfinite(cmd.gripper_trigger_value)) {
     return false;

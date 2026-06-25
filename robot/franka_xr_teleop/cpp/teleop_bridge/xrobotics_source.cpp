@@ -222,6 +222,10 @@ void XrRoboticsSource::OnCallback(int type, int status, void* user_data) {
   cmd.button_b = right.value("secondaryButton", false);
   cmd.right_axis_click =
       GetBoolWithFallback(right, {"axisClick", "primary2DAxisClick", "rightAxisClick"}, false);
+  // Left-controller X (primaryButton) discards the current episode.
+  if (controller.contains("left") && controller["left"].is_object()) {
+    cmd.button_discard = controller["left"].value("primaryButton", false);
+  }
 
   cmd_buffer_->Publish(cmd);
   received_count_.fetch_add(1, std::memory_order_acq_rel);

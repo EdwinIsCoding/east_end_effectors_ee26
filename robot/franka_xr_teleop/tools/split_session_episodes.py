@@ -113,6 +113,14 @@ def pair_episodes(
                 continue
             episodes.append({"start": open_start, "end_ns": end, "end": ev, "synthetic_end": False})
             open_start = None
+        elif name == "episode_discard":
+            # Operator discarded the current episode (left-controller X): drop the
+            # open start->discard span entirely; it never becomes an episode.
+            if open_start is None:
+                warn("episode_discard with no open episode; ignoring it.")
+                continue
+            warn("episode_discard — dropping the current (unfinished) episode span.")
+            open_start = None
 
     if open_start is not None:
         if allow_open_end and fallback_end_ns is not None:

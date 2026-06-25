@@ -233,7 +233,8 @@ def find_episode_boundaries(
     """
     _START_EVENTS = {"episode_start"}
     _END_EVENTS = {"episode_end", "episode_stop", "episode_finish", "episode_finished"}
-    _ALL_EVENTS = _START_EVENTS | _END_EVENTS
+    _DISCARD_EVENTS = {"episode_discard"}
+    _ALL_EVENTS = _START_EVENTS | _END_EVENTS | _DISCARD_EVENTS
 
     robot_times = [infer_timestamp_ns(row) for row in robot_rows]
     if not robot_times:
@@ -275,6 +276,10 @@ def find_episode_boundaries(
                     # just before this new start timestamp.
                     pairs.append((current_start, ts, False))
                 current_start = ts
+            elif name in _DISCARD_EVENTS:
+                # Operator-discarded episode (left-controller X): drop the open
+                # start→discard span entirely; it never becomes an episode.
+                current_start = None
             else:  # end event
                 if current_start is not None:
                     pairs.append((current_start, ts, True))
@@ -311,7 +316,9 @@ def find_episode_boundaries(
     # Used for cleaned datasets that carry only episode_start markers, or
     # raw datasets that only have end markers.
     split_indices: set[int] = {0, len(robot_times)}
-    for ts, _ in events:
+    for ts, name in events:
+        if name in _DISCARD_EVENTS:
+            continue
         split_indices.add(bisect_left(robot_times, ts))
     sorted_splits = sorted(split_indices)
     boundaries = [(s, e) for s, e in zip(sorted_splits[:-1], sorted_splits[1:]) if e > s]
