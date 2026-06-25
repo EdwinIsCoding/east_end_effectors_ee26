@@ -7,11 +7,14 @@
 
 namespace teleop {
 
-void GripperController::Reset(GripperState initial) {
+void GripperController::Reset(GripperState initial, bool trigger_currently_pressed) {
   // Normalize to the only two logical states the planner publishes.
   current_ = initial == GripperState::kOpen ? GripperState::kOpen : GripperState::kClose;
   last_toggle_time_ns_ = 0;
-  trigger_pressed_ = false;
+  // When resetting while the grip trigger is still physically held (e.g. on
+  // rehome after a grasp), seed trigger_pressed_ so the next UpdateDesiredState
+  // does NOT mistake the held trigger for a fresh rising edge and toggle closed.
+  trigger_pressed_ = trigger_currently_pressed;
 }
 
 void GripperController::SyncCurrentState(GripperState measured_state) {

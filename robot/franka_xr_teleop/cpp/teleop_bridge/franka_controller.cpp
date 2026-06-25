@@ -782,10 +782,17 @@ void PlannerLoop(const TeleopBridgeConfig& config,
       planned.control_mode = ControlMode::kHold;
       const double policy_gripper_command = Clamp01(policy_cmd.action.gripper_command);
       const bool policy_rehome_requested = policy_control && policy_cmd.request_rehome;
+      const double gripper_trigger =
+          policy_control ? policy_gripper_command : Clamp01(xr_cmd.gripper_trigger_value);
       const uint64_t completed_rehome_id_snapshot =
           completed_rehome_request_id->load(std::memory_order_acquire);
       if (completed_rehome_id_snapshot != last_seen_completed_rehome_request_id) {
-        gripper_controller.Reset(GripperState::kOpen);
+        // Open the gripper on rehome (B press / episode end). Treat a still-held
+        // grip trigger as already pressed so the UpdateDesiredState below does not
+        // read a false rising edge and immediately re-close; the operator must
+        // release and re-press to grasp again.
+        gripper_controller.Reset(GripperState::kOpen,
+                                 gripper_trigger > config.gripper.open_threshold);
         // Re-home moves the robot outside the normal teleop path, so any cached
         // IK/planner target from before the move is stale and must not be reused
         // as the next XR anchor.
@@ -797,8 +804,6 @@ void PlannerLoop(const TeleopBridgeConfig& config,
         last_valid_manipulability = 0.0;
         last_seen_completed_rehome_request_id = completed_rehome_id_snapshot;
       }
-      const double gripper_trigger =
-          policy_control ? policy_gripper_command : Clamp01(xr_cmd.gripper_trigger_value);
       GripperState desired_state = GripperState::kOpen;
       double gripper_command = 0.0;
       double desired_gripper_width = config.gripper.max_width_m;

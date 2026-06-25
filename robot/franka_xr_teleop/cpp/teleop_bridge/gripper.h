@@ -14,7 +14,7 @@ class GripperController {
   GripperState UpdateDesiredState(const GripperConfig& config, double desired_command, uint64_t now_ns);
   // Keep the desired-state toggle baseline aligned with measured gripper state.
   void SyncCurrentState(GripperState measured_state);
-  void Reset(GripperState initial = GripperState::kOpen);
+  void Reset(GripperState initial = GripperState::kOpen, bool trigger_currently_pressed = false);
 
  private:
   GripperState current_ = GripperState::kOpen;
