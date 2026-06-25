@@ -97,6 +97,11 @@ Useful flags:
 
 - `--reset-cameras`: hardware-reset the RealSense cameras and wait for re-enumeration before
   launching (needed when a camera is on a flaky/bridged USB controller; ~3-4s).
+- `--inpaint-third-person`: **off by default.** Black out the upper-right background of the
+  third_person D405 (above the table's far-right edge) in the recorded frames, to hide
+  background movement. Uses a built-in polygon; override with `--inpaint-poly "x,y x,y ..."`.
+  The mask polygon is written to each camera's `metadata.json` (`mask_poly`). The per-camera
+  recorder also accepts `--mask-poly` directly.
 - `--dry-run`: print the commands without launching recorders.
 - `--disable-zed`, `--disable-realsense`, `--disable-robot`: run a subset.
 - `--zed-svo`, `--zed-depth`: force ZED raw/depth recording on.

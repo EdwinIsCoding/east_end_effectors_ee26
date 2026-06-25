@@ -82,7 +82,31 @@ def parse_args() -> argparse.Namespace:
         help="OpenCV fourcc for rgb.mp4 (default: mp4v; try avc1 if your OpenCV supports it).",
     )
     parser.add_argument("--print-hz", type=float, default=1.0, help="Progress print rate; 0 disables.")
+    parser.add_argument(
+        "--mask-poly",
+        default="",
+        help=(
+            "Optional polygon (in color-frame pixels) to fill with black on every frame "
+            "before writing, e.g. '1060,0 1280,0 1280,335 1080,214'. Empty = no masking. "
+            "Coordinates are in the recorded color resolution (color-width x color-height)."
+        ),
+    )
     return parser.parse_args()
+
+
+def parse_mask_poly(spec: str, np: Any) -> Optional[Any]:
+    spec = spec.strip()
+    if not spec:
+        return None
+    points = []
+    for token in spec.split():
+        xy = token.split(",")
+        if len(xy) != 2:
+            raise ValueError(f"--mask-poly point must be 'x,y'; got {token!r}")
+        points.append((int(xy[0]), int(xy[1])))
+    if len(points) < 3:
+        raise ValueError("--mask-poly needs at least 3 points")
+    return np.array(points, dtype=np.int32)
 
 
 def import_dependencies() -> Tuple[Any, Any, Any]:
@@ -438,6 +462,13 @@ def main() -> int:
         return 1
     align = rs.align(rs.stream.color) if args.depth and not args.no_align_depth else None
 
+    try:
+        mask_poly = parse_mask_poly(args.mask_poly, np)
+    except ValueError as exc:
+        safe_stop_pipeline(pipeline)
+        print(str(exc), file=sys.stderr)
+        return 2
+
     depth_scale_m: Optional[float] = None
     if args.depth:
         depth_sensor = profile.get_device().first_depth_sensor()
@@ -467,6 +498,7 @@ def main() -> int:
         "depth_aligned_to_color": bool(align is not None),
         "requested_fps": args.fps,
         "color_exposure": exposure_state,
+        "mask_poly": mask_poly.tolist() if mask_poly is not None else None,
         "profile": profile_metadata(rs, profile, depth_scale_m),
         "notes": notes,
     }
@@ -502,6 +534,9 @@ def main() -> int:
                         (args.color_width, args.color_height),
                         interpolation=cv2.INTER_AREA,
                     )
+                if mask_poly is not None:
+                    color = color.copy()  # frame buffer may be read-only
+                    cv2.fillPoly(color, [mask_poly], (0, 0, 0))
                 writer.write(color)
 
                 depth_file: Optional[str] = None

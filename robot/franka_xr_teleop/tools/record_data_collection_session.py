@@ -17,6 +17,11 @@ import yaml
 
 STOP_REQUESTED = False
 
+# Black-fill polygon for the third_person D405 (color-frame pixels at 1280x720):
+# masks the upper-right background/movement above the table's far-right edge.
+# Applied ONLY when --inpaint-third-person is passed (off by default). See DATA_COLLECTION.md.
+THIRD_PERSON_MASK_POLY = "1060,0 1280,0 1280,335 1240,308 1180,274 1130,244 1080,214 1060,205"
+
 
 def handle_signal(_signum: int, _frame: object) -> None:
     global STOP_REQUESTED
@@ -98,6 +103,20 @@ def parse_args() -> argparse.Namespace:
             "controller (it only streams on the first pipeline open after a USB reset). "
             "Adds ~3-4s. See tools/reset_cameras.py."
         ),
+    )
+    parser.add_argument(
+        "--inpaint-third-person",
+        action="store_true",
+        help=(
+            "Black out the upper-right background of the third_person D405 (above the "
+            "table's far-right edge) in the RECORDED frames. OFF by default. Applies the "
+            "built-in polygon to the camera with role/id 'third_person'."
+        ),
+    )
+    parser.add_argument(
+        "--inpaint-poly",
+        default="",
+        help="Override the third_person mask polygon, e.g. 'x,y x,y ...' (implies --inpaint-third-person).",
     )
     parser.add_argument("--dry-run", action="store_true", help="Print commands and session metadata without launching.")
     return parser.parse_args()
@@ -391,7 +410,7 @@ def main() -> int:
             continue
         if not (bool_value(camera, "enabled", True) or explicitly_enabled):
             continue
-        commands[f"camera:{camera['id']}"] = build_camera_command(
+        cmd = build_camera_command(
             camera,
             session_dir,
             args.duration_s,
@@ -399,6 +418,14 @@ def main() -> int:
             depth_overrides,
             raw_overrides,
         )
+        # Opt-in black-fill of the third_person background (off by default).
+        inpaint_on = args.inpaint_third_person or bool(args.inpaint_poly)
+        is_third_person = str(camera.get("backend", "")).lower() == "realsense" and (
+            str(camera.get("id", "")) == "third_person" or str(camera.get("role", "")) == "third_person"
+        )
+        if inpaint_on and is_third_person:
+            cmd += ["--mask-poly", args.inpaint_poly or THIRD_PERSON_MASK_POLY]
+        commands[f"camera:{camera['id']}"] = cmd
 
     session_dir.mkdir(parents=True, exist_ok=True)
     (session_dir / "cameras").mkdir(exist_ok=True)
