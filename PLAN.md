@@ -62,7 +62,48 @@ Organizer confirmed using our own control stack is **score-neutral**, and we hav
 - **4. OpenVINO + Pi0 (24–36h):** ✅ runner + `pi0_c1.yaml` ready; ⏳ export to Pantherlake (Intel bonus); ball tracker → OpenVINO; Pi0 if data good.
 - **5. Hardening (36–40h):** reliability runs, error-recovery rehearsal, scoring rehearsal, submission. — ⏳.
 
+## C1 — Classical CV insertion pipeline (hybrid floor)
+Shape-sorter peg-in-hole: white 3D-printed peg → matching shaped socket in a white cube. Shapes seen:
+triangle, circle, pentagon (likely square/hexagon too). Reliable classical solution = the C1 floor
+(VLA/OpenVINO is the ceiling). Stand the cube **hole-up** → vertical insertion = **4-DOF (x, y, z, yaw)**.
+
+### Three hard parts
+1. **Yaw alignment** (not just XY): non-circular pegs must be rotated to the socket angle. n-gon = n-fold
+   symmetric → align within ±180/n°. Circle needs no rotation.
+2. **White-on-white/silver contrast:** colour thresholding can't split white peg from white cube or the
+   silver 8020. **Use the RED PLATE (or a matte dark mat)** — white pops off red; 5× more reliable CV.
+3. **Calibration + compliance:** accurate camera→base extrinsics; stiff bridge → rely on chamfered hole
+   entries + small search, or add the Cartesian-impedance torque controller. Monitor `O_F_ext`.
+
+### Build split (clean seam)
+- **Perception (OFF-ROBOT, ~80% — buildable + testable here now):** OpenCV on RGB(+depth) arrays →
+  `detect_socket()/detect_peg()` returning `{shape, center_px, yaw_deg, polygon, quality}`; plus a
+  pure `backproject(center_px, depth, K, T_cam_base)` helper. Camera-agnostic; tested against the
+  example photos (and real D405 stills when shared). New package `robot/c1_vision/` + tests.
+- **Integration + control (DESKTOP, robot-bound):** camera→base extrinsics calibration (AprilTag/hand-eye),
+  D405 intrinsics + live depth, and the pick→align→insert→verify loop on the bridge + wrench feedback.
+  Needs the robot (currently in use by team → some wait). Minimal once perception is done/tested.
+
+### Pipeline stages
+0. **Calibrate** camera→robot extrinsics (AprilTag/hand-eye). Use **D405 depth** for metric Z (socket rim, peg top).
+1. **Socket pose:** segment bright white top face → find dark polygonal hole → `approxPolyDP` → vertex
+   count = shape; centroid = (x,y); minAreaRect/PCA = yaw; depth = Z → back-project to base.
+2. **Peg pose:** separate white blob → top cross-section polygon → yaw + grasp center + top height. In-hand
+   yaw at grasp = peg yaw (no slip).
+3. **Align + insert:** pick → above socket → rotate EE so peg yaw matches socket yaw (skip for circle) →
+   descend to ~3 mm above rim → compliant descent + 1–3 mm spiral/Lissajous search watching `O_F_ext`;
+   stop on seating force or target depth. Stiff control → loosen collision thresholds, lean on chamfer+search.
+4. **Verify:** target Z reached + force in band.
+
+### Tips
+- Wrist D405 = last-cm visual servo (look down insertion axis); external D405 = coarse pickup.
+- Ensure the bridge exposes `O_F_ext_hat` in the obs (contact force = robustness).
+- Pure classical does NOT earn the Intel/OpenVINO bonus — it's the reliable floor; C2's tracker is the cheap bonus.
+- Phone photos ≠ D405 frames → re-tune perception on real D405 stills (grab a few; minimal robot time).
+
 ## Open items
+- [ ] **(Off-robot)** Build + test `robot/c1_vision/` perception (shape ID + yaw) on the example photos; refine on D405 stills.
+- [ ] **(Desktop)** C1 extrinsics calibration + depth back-projection + pick→align→insert→verify on the bridge.
 - [ ] **(Desktop)** Bring-up gate: bridge build, FCI unlock, RT/communication check, both D405s, 5090 cu128 matmul.
 - [ ] **(Desktop)** First teleop + a small diverse demo set → unblocks off-robot O2 (SmolVLA training).
 - [x] FCI IP of the robot — `192.168.1.11` (in `robot/franka_xr_teleop/configs/robot.yaml`).
