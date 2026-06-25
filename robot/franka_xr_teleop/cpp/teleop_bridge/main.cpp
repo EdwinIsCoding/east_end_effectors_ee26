@@ -16,6 +16,7 @@
 #include "franka_controller.h"
 #include "observation_pub.h"
 #include "policy_action_source.h"
+#include "udp_xr_source.h"
 #include "xrobotics_source.h"
 
 namespace {
@@ -42,6 +43,7 @@ struct Options {
   teleop::ControlMode control_mode = teleop::ControlMode::kPose;
   bool control_source_override = false;
   teleop::ControlSource control_source = teleop::ControlSource::kXr;
+  std::string xr_input_source_override;  // empty = use config
   bool policy_bind_ip_override = false;
   std::string policy_bind_ip;
   bool policy_action_port_override = false;
@@ -132,6 +134,13 @@ bool ParseArgs(int argc, char** argv, Options* out) {
         return false;
       }
       out->control_source_override = true;
+      continue;
+    }
+    if (arg == "--xr-input-source") {
+      if (i + 1 >= argc) {
+        return false;
+      }
+      out->xr_input_source_override = argv[++i];
       continue;
     }
     if (arg == "--policy-bind-ip") {
@@ -259,6 +268,9 @@ int main(int argc, char** argv) {
   if (options.control_source_override) {
     config.bridge.control_source = options.control_source;
   }
+  if (!options.xr_input_source_override.empty()) {
+    config.bridge.xr_input_source = options.xr_input_source_override;
+  }
   if (options.policy_bind_ip_override) {
     config.bridge.policy.bind_ip = options.policy_bind_ip;
   }
@@ -294,8 +306,16 @@ int main(int argc, char** argv) {
   teleop::LatestObservationBuffer observation_buffer;
 
   std::unique_ptr<teleop::XrRoboticsSource> xr_source;
+  std::unique_ptr<teleop::UdpXrSource> udp_xr_source;
   std::unique_ptr<teleop::PolicyActionSource> policy_action_source;
-  if (config.bridge.control_source == teleop::ControlSource::kXr) {
+  // When control_source==kXr, xr_input_source picks the Quest SDK ("xrobotics_sdk", default) or a
+  // desktop keyboard/mouse driver streaming XRCommand JSON over UDP ("udp"/"keyboard"/"mouse").
+  // Both feed the same command_buffer, so the mapper + IK + safety path is identical.
+  const bool use_udp_xr = config.bridge.control_source == teleop::ControlSource::kXr &&
+                          (config.bridge.xr_input_source == "udp" ||
+                           config.bridge.xr_input_source == "keyboard" ||
+                           config.bridge.xr_input_source == "mouse");
+  if (config.bridge.control_source == teleop::ControlSource::kXr && !use_udp_xr) {
     xr_source = std::make_unique<teleop::XrRoboticsSource>(&command_buffer, &g_stop_requested);
     if (!xr_source->Start()) {
       std::cerr << "Failed to initialize XRoboToolkit SDK source.\n"
@@ -303,6 +323,19 @@ int main(int argc, char** argv) {
                 << "(for example /opt/apps/roboticsservice/runService.sh).\n";
       return 2;
     }
+  } else if (use_udp_xr) {
+    udp_xr_source = std::make_unique<teleop::UdpXrSource>(
+        config.bridge.policy.bind_ip,
+        config.bridge.xr_udp_port,
+        &command_buffer,
+        &g_stop_requested);
+    if (!udp_xr_source->Start()) {
+      std::cerr << "Failed to initialize UDP XR source on "
+                << config.bridge.policy.bind_ip << ":" << config.bridge.xr_udp_port << ".\n";
+      return 2;
+    }
+    std::cout << "UDP XR source (keyboard/mouse) listening on udp://"
+              << config.bridge.policy.bind_ip << ":" << config.bridge.xr_udp_port << "\n";
   } else {
     policy_action_source = std::make_unique<teleop::PolicyActionSource>(
         config.bridge.policy.bind_ip,
@@ -340,10 +373,19 @@ int main(int argc, char** argv) {
         if (config.bridge.control_source == teleop::ControlSource::kXr) {
           const teleop::XRCommand cmd = command_buffer.ReadLatest();
           const uint64_t age_ns = now_ns > cmd.timestamp_ns ? (now_ns - cmd.timestamp_ns) : 0;
-          std::cout << "server_connected=" << (xr_source->server_connected() ? 1 : 0)
-                    << " device_connected=" << (xr_source->device_connected() ? 1 : 0)
-                    << " rx_count=" << xr_source->received_count()
-                    << " dropped=" << xr_source->dropped_count()
+          // Either the Quest SDK source or the UDP keyboard/mouse source is active here.
+          const bool srv = xr_source ? xr_source->server_connected()
+                                     : (udp_xr_source && udp_xr_source->server_connected());
+          const bool dev = xr_source ? xr_source->device_connected()
+                                     : (udp_xr_source && udp_xr_source->device_connected());
+          const uint64_t rxc = xr_source ? xr_source->received_count()
+                                         : (udp_xr_source ? udp_xr_source->received_count() : 0);
+          const uint64_t drp = xr_source ? xr_source->dropped_count()
+                                         : (udp_xr_source ? udp_xr_source->dropped_count() : 0);
+          std::cout << "server_connected=" << (srv ? 1 : 0)
+                    << " device_connected=" << (dev ? 1 : 0)
+                    << " rx_count=" << rxc
+                    << " dropped=" << drp
                     << " seq=" << cmd.sequence_id
                     << " age_ms=" << (age_ns * 1e-6)
                     << " right_grip=" << cmd.control_trigger_value
@@ -404,6 +446,9 @@ int main(int argc, char** argv) {
     if (xr_source) {
       xr_source->Stop();
     }
+    if (udp_xr_source) {
+      udp_xr_source->Stop();
+    }
     if (policy_action_source) {
       policy_action_source->Stop();
     }
@@ -417,6 +462,9 @@ int main(int argc, char** argv) {
   g_stop_requested.store(true, std::memory_order_release);
   if (xr_source) {
     xr_source->Stop();
+  }
+  if (udp_xr_source) {
+    udp_xr_source->Stop();
   }
   if (policy_action_source) {
     policy_action_source->Stop();

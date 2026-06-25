@@ -111,6 +111,11 @@ bool LoadTeleopConfig(const std::string& path, AppConfig* config, std::string* e
       return false;
     }
   }
+  ReadScalar(teleop, "xr_input_source", &config->bridge.xr_input_source);
+  int xr_udp_port = static_cast<int>(config->bridge.xr_udp_port);
+  if (ReadScalar(teleop, "xr_udp_port", &xr_udp_port)) {
+    config->bridge.xr_udp_port = static_cast<uint16_t>(xr_udp_port);
+  }
   ReadScalar(teleop,
              "a_button_toggles_robot_control",
              &config->bridge.teleop.a_button_toggles_robot_control);

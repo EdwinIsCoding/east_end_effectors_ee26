@@ -337,6 +337,10 @@ struct TeleopBridgeConfig {
   SafetyLimits safety{};
   TeleopRuntimeConfig teleop{};
   ControlSource control_source = ControlSource::kXr;
+  // XR command source when control_source==kXr: "xrobotics_sdk" (Quest SDK, default) or
+  // "udp"/"keyboard"/"mouse" (desktop driver streaming XRCommand JSON to xr_udp_port).
+  std::string xr_input_source = "xrobotics_sdk";
+  uint16_t xr_udp_port = 28083;
   PolicyRuntimeConfig policy{};
   GripperConfig gripper{};
   IkConfig ik{};
