@@ -28,6 +28,7 @@ uv python install 3.13
 uv venv --python 3.13 --seed .venv
 source .venv/bin/activate
 uv pip install -e ".[smolvla,intelrealsense]"
+uv pip install scipy   # required by tools/run_vla_policy.py (Butterworth filter import)
 ```
 
 What this does:
