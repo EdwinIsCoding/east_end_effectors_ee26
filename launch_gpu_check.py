@@ -7,14 +7,16 @@ Run this FROM the ml.t3.medium workspace BEFORE the real training job, to confir
       from the blocked interactive/Studio GPU quota), and
   (b) CUDA / torch / bf16 work inside the DLC container.
 
-It spins up one ml.g6e.xlarge, runs sagemaker_gpu_check/gpu_check.py, streams the
-logs back here, then tears the instance down. Costs ~a few minutes of g6e time.
+It spins up one GPU instance, runs sagemaker_gpu_check/gpu_check.py, streams the
+logs back here, then tears the instance down. Costs ~a few minutes of GPU time.
 
-    python launch_gpu_check.py
+    python launch_gpu_check.py                              # default ml.g6e.xlarge (L40S)
+    python launch_gpu_check.py --instance-type ml.g5.2xlarge  # probe a type you have quota for
 """
 
 from __future__ import annotations
 
+import argparse
 import time
 
 import boto3
@@ -23,6 +25,12 @@ from sagemaker.pytorch import PyTorch
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser(description="Fire a cheap ephemeral GPU smoke-test job.")
+    ap.add_argument("--instance-type", default="ml.g6e.xlarge",
+                    help="GPU training instance to probe (default: %(default)s). Switch this to "
+                         "whatever your account has training quota for, e.g. ml.g5.2xlarge.")
+    args = ap.parse_args()
+
     sm_session = sagemaker.Session()
     try:
         role = sagemaker.get_execution_role()
@@ -42,7 +50,7 @@ def main() -> None:
         source_dir="sagemaker_gpu_check",
         role=role,
         instance_count=1,
-        instance_type="ml.g6e.xlarge",     # 1x L40S, 48 GB
+        instance_type=args.instance_type,  # default ml.g6e.xlarge (1x L40S, 48 GB)
         framework_version="2.1.0",
         py_version="py310",
         sagemaker_session=sm_session,
@@ -53,7 +61,7 @@ def main() -> None:
     )
 
     job_name = f"ee26-gpu-check-{int(time.time())}"
-    print(f"[check] launching {job_name} on ml.g6e.xlarge ...")
+    print(f"[check] launching {job_name} on {args.instance_type} ...")
     # wait=True streams the container's stdout (nvidia-smi, CUDA results) to this
     # console. If the job ends "Completed" -> GPU works. "Failed" with our exit 2
     # -> the instance had no usable GPU. A ResourceLimitExceeded at submit time
