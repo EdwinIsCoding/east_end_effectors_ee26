@@ -13,7 +13,8 @@ Work only in your owner dirs. If unsure which machine you're on: GPU + robot pre
 - ✅ **Off-robot (this Mac) complete & pushed:** repo scaffold + frozen `CONTRACT.md`; 110 tests green
   (training 105 + challenge2 5); C1 training turn-key (`training/TASK_C1.md`); Intel-bonus runner
   (`training/src/inference/openvino_runner.py`, `--self-test` PASS); C2 ball-balance stack (`challenge2/`).
-- ⏳ **Desktop in progress:** hardware bring-up, teleop, demo collection, training, deploy — none done yet.
+- ⏳ **Desktop:** ✅ hardware bring-up, ✅ live teleop (D1), ✅ data collection + LeRobot convert (D2; lerobot
+  env set up), gripper opens on B/rehome. ⏳ remaining: bulk collection, training, deploy.
 - ⛔ **Blocked:** off-robot O2 (real SmolVLA/Pi0 training) needs the Desktop's **first dataset**. Nothing more
   to do off-robot until then except optional speculative work (e.g. synthetic mini-dataset dry-run, needs `lerobot`).
 - 🔧 **Fix-on-arrival (flagged in code):** (1) confirm `InferenceModel.select_action` obs-dict/action shapes on
@@ -101,10 +102,58 @@ cd robot/franka-sanity-checks
 
 **🔁 Headset sleeps / "connect error" / timeout in the app:** taking the headset off drops the USB→ADB link, which kills the reverse tunnel — the bridge, service, and robot keep running. Fix is just: **wake/wear the headset, then redo steps 1–2** (`adb kill-server && adb start-server`; re-add `adb reverse tcp:63901 tcp:63901`) and reconnect the app to `127.0.0.1`. Do **not** restart the bridge or re-home.
 
+## ✅ Data collection → LeRobot dataset (D2) — WORKING 2026-06-25
+Validated end-to-end on a 2-episode session. Full detail in memory `ee26-data-collection-workflow.md`.
+
+**Capture.** Bridge running (holds home; `--obs-port 28081`), then in `~/ee26_cam_venv`:
+```bash
+cd robot/franka_xr_teleop
+./tools/record_data_collection_session.py --reset-cameras --recording-id <session_id>
+```
+Records `robot.jsonl` (~50 Hz) + both D405 `cameras/<name>/rgb.mp4`. **A = episode start; B = episode
+end + rehome + gripper opens.** Markers ride the obs stream → `episode_events.jsonl`. Ctrl-C / SIGTERM
+stops and **auto-splits** the session into `episodes/episode_NNN/` (joints + both camera clips).
+⚠️ **The recorder must be running BEFORE you press A** — the bridge only UDP-streams obs, it does not
+save; with nothing recording, A/B episodes are lost.
+
+**Data lives in 3 stages (all gitignored):**
+| Stage | Path | What |
+|---|---|---|
+| raw session | `robot/franka_xr_teleop/recordings/<id>/` | `robot.jsonl` (continuous; per row: `timestamp_ns`, `robot_state{q[7],q_cmd,dq,gripper_width,gripper_state,tcp_*}`, `executed_action`, `commanded/desired_target_state`, `status`), `episode_events.jsonl` (A/B markers = the episode definition), `cameras/<name>/{rgb.mp4,frames.jsonl}`, `episodes/episode_NNN/` (per-episode split for QA), `episodes_index.json` |
+| cleaned | `training/cleaned_datasets/<id>/` | motion-trimmed `robot.jsonl`, regenerated `episode_events.jsonl`, `annotations.jsonl` (per-episode task), camera symlinks |
+| LeRobot v3 | `training/lerobot_datasets/<id>/` | `data/*.parquet` (`observation.state[8]`, `action[8]`, indices), `videos/observation.images.{top,third_person_d405}/.../*.mp4`, `meta/{info,stats,tasks,episodes}`. `meta/episodes` parquet has `episode_index, length, tasks, dataset_from_index, dataset_to_index`. Train-ready. |
+
+**Convert a batch** (CPU-only — runs on the RT boot during collection):
+```bash
+source lerobot/.venv/bin/activate && cd training
+python main.py clean    <id> --datasets-root ../robot/franka_xr_teleop/recordings --force
+python main.py annotate <id> --overwrite
+python main.py convert  <id> --primary-camera wrist_d405 --force   # wrist → observation.images.top
+```
+
+**Drop a bad episode — do it BEFORE convert** (removing one from LeRobot v3 is painful: it re-indexes
+parquet + concatenated videos + stats):
+1. QA the split clips — play `recordings/<id>/episodes/episode_NNN/cameras/wrist_d405/rgb.mp4`.
+   `episodes/episodes_index.json` maps each `episode_NNN` → its A/B `packet_index` + timestamps.
+2. Episodes are the ordered start/end **pairs** in `episode_events.jsonl`. To drop the Kth (0-based),
+   delete its `episode_start`+`episode_end` rows (lines `2K+1`, `2K+2`) from
+   `recordings/<id>/episode_events.jsonl`.
+3. Re-run clean→annotate→convert. The episode is gone; the rest renumber 0..N-1.
+
+**Batch cadence (Edwin):** collect **20**, convert that batch while collecting the next 20, repeat
+until all data is in, then reboot into `6.8.0-124-generic` to train.
+
+**lerobot env (Desktop, first set up 2026-06-25):** repo-root `lerobot/` = manual clone of
+`huggingface/lerobot @ 05a52238` (gitignored; NOT a submodule in this repo). `lerobot/.venv` is py3.13,
+`uv pip install -e ".[smolvla,intelrealsense,dataset]"`, **torch 2.10.0+cu128** → the SAME venv serves
+both boots (CPU convert on RT, GPU train on generic). Needs system `ffmpeg` (torchcodec). uv + its
+managed python are pinned to REAL `~/.local` (`UV_PYTHON_INSTALL_DIR`, `unset XDG_DATA_HOME`) to dodge
+the VS Code snap XDG redirect that would dangle on updates. Recipe: `robot/franka_xr_teleop/LEROBOT_VENV_SETUP.md`.
+
 ## Repo map
 | Path | What |
 |---|---|
-| `robot/franka_xr_teleop/` | libfranka bridge (C++), teleop, recorders, `tools/run_vla_policy.py` deploy |
+| `robot/franka_xr_teleop/` | libfranka bridge (C++), teleop, recorders, `tools/record_data_collection_session.py` + `tools/split_session_episodes.py` (data collection), `tools/run_vla_policy.py` deploy; `DATA_COLLECTION.md` |
 | `robot/franka-sanity-checks/` | gripper / safe-translate hardware checks |
 | `training/` | SmolVLA-Testing pipeline (clean/annotate/convert/train/eval); `main.py` CLI |
 | `training/TASK_C1.md` | turn-key C1 record→…→train recipe (run on Desktop) |
