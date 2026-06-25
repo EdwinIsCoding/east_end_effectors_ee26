@@ -89,6 +89,16 @@ def parse_args() -> argparse.Namespace:
         metavar="CAMERA",
         help="Force backend raw recording for a camera: ZED .svo or RealSense .bag.",
     )
+    parser.add_argument(
+        "--reset-cameras",
+        action="store_true",
+        help=(
+            "Hardware-reset the RealSense cameras and wait for re-enumeration before "
+            "launching recorders. Required when a camera is on a flaky/bridged USB "
+            "controller (it only streams on the first pipeline open after a USB reset). "
+            "Adds ~3-4s. See tools/reset_cameras.py."
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print commands and session metadata without launching.")
     return parser.parse_args()
 
@@ -402,6 +412,26 @@ def main() -> int:
     if not commands:
         print("No recorders enabled.", file=sys.stderr)
         return 2
+
+    if args.reset_cameras:
+        # Reset BEFORE opening: a camera on a bridged USB controller only streams on
+        # the first pipeline open after a USB reset. Each camera below is opened by
+        # exactly one subprocess, so resetting here makes those opens first-after-reset.
+        reset_serials: List[str] = []
+        for camera in cameras:
+            if str(camera.get("backend", "realsense")) != "realsense":
+                continue
+            if not any(name == f"camera:{camera['id']}" for name in commands):
+                continue
+            serial = serial_overrides.get(camera["id"]) or serial_overrides.get(
+                str(camera.get("camera_name", ""))
+            ) or str(camera.get("serial", "")).strip()
+            if serial:
+                reset_serials.append(serial)
+        if reset_serials:
+            from reset_cameras import reset_configured_cameras
+            print(f"resetting cameras before recording: {', '.join(reset_serials)}", flush=True)
+            reset_configured_cameras(reset_serials)
 
     processes: Dict[str, subprocess.Popen[Any]] = {}
     try:

@@ -53,11 +53,23 @@ PTP/NTP and record receive timestamps on every machine.
 
 ## Record A Full Session
 
+> **D405 USB note (this desktop).** The cameras must be on USB3, and one camera is on a
+> bridged/flaky USB controller that only delivers frames on the *first* pipeline open after a
+> USB reset. So: (1) `source ~/ee26_cam_venv/bin/activate` first — the launcher spawns the
+> camera recorders via their `#!/usr/bin/env python3` shebang, so the venv must be on PATH or
+> the subprocesses use system python (no `cv2`) and fail; (2) pass `--reset-cameras` so the
+> cameras are hardware-reset right before recording (adds ~3-4s). Verified: a 60s dual
+> 1280x720@30 capture held 29.8 fps on both cameras with 0 frame drops. Standalone reset (for
+> teleop/deploy): `./tools/reset_cameras.py`. Root cause + port map: memory
+> `ee26-wrist-d405-flaky`.
+
 For normal collection, use the launcher to start robot observations, the
 end-effector ZED, and the third-person D405 together:
 
 ```bash
+source ~/ee26_cam_venv/bin/activate
 ./tools/record_data_collection_session.py \
+  --reset-cameras \
   --recording-id session_001
 ```
 
@@ -83,6 +95,8 @@ Common overrides:
 
 Useful flags:
 
+- `--reset-cameras`: hardware-reset the RealSense cameras and wait for re-enumeration before
+  launching (needed when a camera is on a flaky/bridged USB controller; ~3-4s).
 - `--dry-run`: print the commands without launching recorders.
 - `--disable-zed`, `--disable-realsense`, `--disable-robot`: run a subset.
 - `--zed-svo`, `--zed-depth`: force ZED raw/depth recording on.
