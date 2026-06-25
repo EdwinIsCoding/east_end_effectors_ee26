@@ -22,6 +22,10 @@ venv/
 env/
 .ipynb_checkpoints/
 
+# Local lerobot checkout (huggingface/lerobot, pinned via LEROBOT_VENV_SETUP.md;
+# not a submodule in this repo). Large; never commit.
+/lerobot/
+
 # Data / models / logs (large artifacts)
 # NOTE: ignore dataset dirs by specific name, NOT a bare `data/` — that would
 # also drop the tracked `training/src/data/` package.

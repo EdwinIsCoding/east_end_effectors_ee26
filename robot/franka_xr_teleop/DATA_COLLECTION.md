@@ -110,6 +110,68 @@ Useful flags:
 The launcher writes `session_metadata.json` containing the resolved commands and
 config used for the session.
 
+When recording stops (Ctrl-C, `--duration-s`, or a recorder exit), the launcher
+**auto-splits** the continuous session into per-episode folders using the A/B
+markers — see "Per-Episode Segmentation" below. Pass `--no-auto-split` to skip
+it (e.g. to split later with different options), `--min-episode-duration-s S` to
+drop short episodes, and `--allow-open-end` to keep a final A with no B.
+
+## Episode Boundaries (A / B Buttons)
+
+Collection is segmented entirely from the **Oculus right controller** while the
+teleop bridge runs (this is the default; `teleop.a_button_toggles_robot_control:
+false`):
+
+- **A → episode start.** The bridge emits a one-shot `status.episode_start` in
+  the UDP observation stream; the robot recorder writes an `episode_start` row to
+  `episode_events.jsonl`.
+- **B → episode end + rehome.** The bridge emits `status.episode_end`, then opens
+  the gripper and runs the full rehome route to `q_home` before the next episode.
+  The recorder writes an `episode_end` row.
+
+The streams (`robot.jsonl`, each `cameras/<name>/rgb.mp4`) keep recording
+continuously across episodes; A/B only mark the boundaries. Press A again after a
+rehome to start the next episode in the same session.
+
+## Per-Episode Segmentation
+
+`tools/split_session_episodes.py` carves a finished session into self-contained
+episode folders, one per A→B span, each holding the joints and **both** camera
+clips:
+
+```bash
+source ~/ee26_cam_venv/bin/activate   # cv2, for per-episode mp4 clips
+./tools/split_session_episodes.py recordings/session_001
+```
+
+Output:
+
+```text
+recordings/session_001/episodes/
+  episode_000/
+    robot.jsonl              # robot rows with start_ns <= timestamp_ns <= end_ns
+    episode_meta.json        # window, duration, sample/frame counts, source markers
+    cameras/
+      third_person_d405/{ rgb.mp4, frames.jsonl, metadata.json }
+      wrist_d405/{ rgb.mp4, frames.jsonl, metadata.json }
+  episode_001/ ...
+  episodes_index.json        # summary of every episode
+```
+
+The robot `timestamp_ns` and each camera `host_timestamp_ns` share the same host
+monotonic clock, so the robot-time episode window bounds the camera frames
+directly. Each episode's `rgb.mp4` is clipped to its window and its
+`frames.jsonl` `rgb_video_frame` is re-indexed to the clip (the original index is
+kept as `source_rgb_video_frame`). Without OpenCV the splitter skips clipping and
+points each `frames.jsonl` at the parent session video instead.
+
+Useful flags:
+
+- `--no-extract-clips`: don't re-encode per-episode mp4s; reference the parent video.
+- `--min-duration-s S`: drop episodes shorter than `S` seconds.
+- `--allow-open-end`: keep a trailing `episode_start` with no `episode_end`,
+  closing it at the last robot sample.
+
 ## Record Robot Observations Manually
 
 Start the teleop bridge with UDP observations enabled:

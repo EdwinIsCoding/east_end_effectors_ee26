@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Launch synchronized robot and camera data recorders."""
 
 from __future__ import annotations
@@ -119,6 +120,26 @@ def parse_args() -> argparse.Namespace:
         help="Override the third_person mask polygon, e.g. 'x,y x,y ...' (implies --inpaint-third-person).",
     )
     parser.add_argument("--dry-run", action="store_true", help="Print commands and session metadata without launching.")
+    parser.add_argument(
+        "--no-auto-split",
+        action="store_true",
+        help=(
+            "Do not split the session into per-episode folders when recording stops. "
+            "By default the session is carved on the A/B episode markers into "
+            "episodes/episode_NNN/ (joints + both camera clips). See split_session_episodes.py."
+        ),
+    )
+    parser.add_argument(
+        "--min-episode-duration-s",
+        type=float,
+        default=0.0,
+        help="Drop episodes shorter than this during auto-split (default: 0).",
+    )
+    parser.add_argument(
+        "--allow-open-end",
+        action="store_true",
+        help="During auto-split, keep a trailing episode_start (A with no B), closing it at the last robot sample.",
+    )
     return parser.parse_args()
 
 
@@ -461,6 +482,7 @@ def main() -> int:
             reset_configured_cameras(reset_serials)
 
     processes: Dict[str, subprocess.Popen[Any]] = {}
+    rc = 0
     try:
         for name, cmd in commands.items():
             processes[name] = subprocess.Popen(cmd, cwd=str(repo_dir()))
@@ -468,18 +490,38 @@ def main() -> int:
 
         while not STOP_REQUESTED:
             exited = [(name, proc.poll()) for name, proc in processes.items() if proc.poll() is not None]
-            failed = [(name, rc) for name, rc in exited if rc != 0]
+            failed = [(name, code) for name, code in exited if code != 0]
             if failed:
-                for name, rc in failed:
-                    print(f"{name} exited unexpectedly rc={rc}", file=sys.stderr, flush=True)
-                return 1
+                for name, code in failed:
+                    print(f"{name} exited unexpectedly rc={code}", file=sys.stderr, flush=True)
+                rc = 1
+                break
             if len(exited) == len(processes):
-                return 0
+                break
             time.sleep(0.25)
     finally:
         terminate_processes(processes)
 
-    return 0
+    # Carve the just-recorded continuous session into per-episode folders using
+    # the A/B markers, so each A->B span becomes a self-contained episode with
+    # joints + both camera clips. Recording is already safely on disk; a split
+    # failure must not fail the session.
+    if not args.no_auto_split and "robot" in commands:
+        try:
+            sys.path.insert(0, str(script_dir()))
+            from split_session_episodes import split_session
+
+            split_session(
+                session_dir,
+                output_subdir="episodes",
+                extract_clips=True,
+                min_duration_s=args.min_episode_duration_s,
+                allow_open_end=args.allow_open_end,
+            )
+        except Exception as exc:  # noqa: BLE001 - never fail a session over post-processing
+            print(f"auto-split failed (recording is saved): {exc}", file=sys.stderr, flush=True)
+
+    return rc
 
 
 if __name__ == "__main__":
