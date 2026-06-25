@@ -45,14 +45,54 @@ JOINT_ACTION_DIM = 7
 ACTION_SPACE = "joint_position_absolute"
 DEFAULT_ACTION_PORT = 28082
 DEFAULT_OBS_PORT = 28081
-WRIST_SERIAL = "128422271845"
-EXTERNAL_SERIAL = "128422271175"
+# Camera serials: the canonical source is robot/.../configs/data_collection.yaml (CONTRACT §1).
+# These are CONTRACT-current fallbacks used only when the config can't be read. Keep in sync.
+WRIST_SERIAL = "130322271109"      # wrist D405 -> observation.images.top
+EXTERNAL_SERIAL = "130322273529"   # external D405 -> observation.images.third_person_d405
 
 JOINT_LIMIT_MARGIN_RAD = 0.02
 PANDA_JOINT_LOWER_LIMITS_RAD = np.asarray(
     [-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973], dtype=np.float64)
 PANDA_JOINT_UPPER_LIMITS_RAD = np.asarray(
     [2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973], dtype=np.float64)
+
+
+# --- Camera serial resolution (canonical source: data_collection.yaml, CONTRACT §1) ---------
+def _default_camera_config_path():
+    # repo layout: training/src/inference/openvino_runner.py -> robot/.../configs/data_collection.yaml
+    from pathlib import Path
+    return (Path(__file__).resolve().parents[3]
+            / "robot" / "franka_xr_teleop" / "configs" / "data_collection.yaml")
+
+
+def load_camera_serials(config_path=None):
+    """Resolve {WRIST_IMAGE_KEY: serial, EXTERNAL_IMAGE_KEY: serial} from data_collection.yaml.
+
+    data_collection.yaml is the canonical camera->serial mapping (CONTRACT §1); match enabled
+    realsense cameras by their obs_key. Falls back to the CONTRACT-current constants when the
+    config or PyYAML is unavailable, so --self-test / --mock still run anywhere.
+    """
+    serials = {WRIST_IMAGE_KEY: WRIST_SERIAL, EXTERNAL_IMAGE_KEY: EXTERNAL_SERIAL}
+    try:
+        import yaml
+    except ImportError:
+        return serials
+    from pathlib import Path
+    path = Path(config_path) if config_path else _default_camera_config_path()
+    if not path.is_file():
+        return serials
+    try:
+        data = yaml.safe_load(path.read_text()) or {}
+    except Exception:
+        return serials
+    for cam in data.get("cameras", []):
+        if cam.get("backend") != "realsense" or not cam.get("enabled", False):
+            continue
+        serial = str(cam.get("serial", "")).strip()
+        obs_key = cam.get("obs_key", "")
+        if serial and obs_key in serials:
+            serials[obs_key] = serial
+    return serials
 
 
 # --- Action wire format (CONTRACT §2) ---------------------------------------
@@ -283,8 +323,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--obs-port", type=int, default=DEFAULT_OBS_PORT)
     p.add_argument("--rate", type=float, default=30.0, help="Control rate (Hz).")
     p.add_argument("--jitter-std", type=float, default=0.0, help="Gaussian joint jitter (rad) for mm precision.")
-    p.add_argument("--wrist-serial", type=str, default=WRIST_SERIAL)
-    p.add_argument("--external-serial", type=str, default=EXTERNAL_SERIAL)
+    p.add_argument("--camera-config", type=str, default=None,
+                   help="Path to data_collection.yaml for camera serials "
+                        "(default: repo robot/franka_xr_teleop/configs/data_collection.yaml).")
+    p.add_argument("--wrist-serial", type=str, default=None,
+                   help="Override wrist D405 serial (default: resolved from --camera-config).")
+    p.add_argument("--external-serial", type=str, default=None,
+                   help="Override external D405 serial (default: resolved from --camera-config).")
     p.add_argument("--max-steps", type=int, default=None)
     return p.parse_args()
 
@@ -309,7 +354,11 @@ def main() -> int:
             raise SystemExit("--model is required unless --mock/--self-test")
         listener = UdpStateListener(args.obs_bind_ip, args.obs_port)
         listener.start()
-        cameras = RealSenseCameras(args.wrist_serial, args.external_serial)
+        serials = load_camera_serials(args.camera_config)
+        wrist_serial = args.wrist_serial or serials[WRIST_IMAGE_KEY]
+        external_serial = args.external_serial or serials[EXTERNAL_IMAGE_KEY]
+        print(f"[cameras] wrist={wrist_serial} external={external_serial}")
+        cameras = RealSenseCameras(wrist_serial, external_serial)
         sender = ActionSender(args.bridge_ip, args.action_port)
         state_source = listener.latest
         image_source = cameras.read

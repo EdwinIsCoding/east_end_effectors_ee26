@@ -46,3 +46,41 @@ def test_mock_policy_holds_current_joints():
     action = ovr.MockPolicy().select_action(obs)
     assert action.shape == (8,)
     np.testing.assert_allclose(action[:7], [0.1] * 7)
+
+
+def test_fallback_serials_match_contract():
+    # CONTRACT §1: wrist 130322271109 -> top, external 130322273529 -> third_person_d405.
+    assert ovr.WRIST_SERIAL == "130322271109"
+    assert ovr.EXTERNAL_SERIAL == "130322273529"
+
+
+def test_load_camera_serials_reads_config(tmp_path):
+    cfg = tmp_path / "data_collection.yaml"
+    cfg.write_text(
+        "cameras:\n"
+        "  - id: third_person\n"
+        "    enabled: true\n"
+        "    backend: realsense\n"
+        "    obs_key: observation.images.third_person_d405\n"
+        "    serial: \"111111111111\"\n"
+        "  - id: wrist\n"
+        "    enabled: true\n"
+        "    backend: realsense\n"
+        "    obs_key: observation.images.top\n"
+        "    serial: \"222222222222\"\n"
+        "  - id: zed_wrist\n"            # non-realsense + disabled: must be ignored
+        "    enabled: false\n"
+        "    backend: zed\n"
+        "    obs_key: observation.images.top\n"
+        "    serial: \"999999999999\"\n"
+    )
+    pytest.importorskip("yaml")
+    serials = ovr.load_camera_serials(str(cfg))
+    assert serials[ovr.WRIST_IMAGE_KEY] == "222222222222"
+    assert serials[ovr.EXTERNAL_IMAGE_KEY] == "111111111111"
+
+
+def test_load_camera_serials_falls_back_when_missing():
+    serials = ovr.load_camera_serials("/nonexistent/data_collection.yaml")
+    assert serials[ovr.WRIST_IMAGE_KEY] == ovr.WRIST_SERIAL
+    assert serials[ovr.EXTERNAL_IMAGE_KEY] == ovr.EXTERNAL_SERIAL
