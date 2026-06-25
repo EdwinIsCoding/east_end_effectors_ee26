@@ -111,7 +111,8 @@ cd robot/franka_xr_teleop
 ./tools/record_data_collection_session.py --reset-cameras --recording-id <session_id>
 ```
 Records `robot.jsonl` (~50 Hz) + both D405 `cameras/<name>/rgb.mp4`. **A = episode start; B = episode
-end + rehome + gripper opens.** Markers ride the obs stream → `episode_events.jsonl`. Ctrl-C / SIGTERM
+end + rehome + gripper opens; left-controller X = discard** the current episode (rehomes like B, but the
+A→X span is dropped — never becomes an episode). Markers ride the obs stream → `episode_events.jsonl`. Ctrl-C / SIGTERM
 stops and **auto-splits** the session into `episodes/episode_NNN/` (joints + both camera clips).
 ⚠️ **The recorder must be running BEFORE you press A** — the bridge only UDP-streams obs, it does not
 save; with nothing recording, A/B episodes are lost.
@@ -132,14 +133,16 @@ Writes `recordings_cc/cleaned/<id>/` + `recordings_cc/lerobot/<id>/` (train-read
 `main.py clean → annotate → convert --primary-camera wrist_d405` against the lerobot venv; pass extra
 flags through (e.g. `--keep-blank-episodes`) or run the three `main.py` steps by hand for one-offs.
 
-**Drop a bad episode — do it BEFORE convert** (removing one from LeRobot v3 is painful: it re-indexes
-parquet + concatenated videos + stats):
-1. QA the split clips — play `recordings/<id>/episodes/episode_NNN/cameras/wrist_d405/rgb.mp4`.
-   `episodes/episodes_index.json` maps each `episode_NNN` → its A/B `packet_index` + timestamps.
-2. Episodes are the ordered start/end **pairs** in `episode_events.jsonl`. To drop the Kth (0-based),
-   delete its `episode_start`+`episode_end` rows (lines `2K+1`, `2K+2`) from
-   `recordings/<id>/episode_events.jsonl`.
-3. Re-run clean→annotate→convert. The episode is gone; the rest renumber 0..N-1.
+**Drop a bad episode** (raw continuous bytes are always written, but "dropping" just means it never
+becomes a segmented/converted episode — do it BEFORE convert; pulling one from LeRobot v3 re-indexes
+parquet + videos + stats):
+- **Live, in the moment:** press **left-controller X** while the episode is failing → rehome + the span
+  is tagged `episode_discard`, which the splitter AND cleaner skip. Never lands anywhere downstream.
+- **Post-hoc, during QA:** play `recordings/<id>/episodes/episode_NNN/cameras/wrist_d405/rgb.mp4`
+  (`episodes_index.json` maps `episode_NNN`→markers), then exclude by 0-based index:
+  `./tools/process_recording.sh <id> --drop-episodes 2,5` (passes `--drop-episodes` to `clean`).
+- **Manual fallback:** delete an episode's `episode_start`+`episode_end` pair from
+  `recordings/<id>/episode_events.jsonl` and re-run. Episodes renumber 0..N-1 either way.
 
 **Batch cadence (Edwin):** collect **20**, convert that batch while collecting the next 20, repeat
 until all data is in, then reboot into `6.8.0-124-generic` to train.
