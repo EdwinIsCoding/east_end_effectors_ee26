@@ -1,0 +1,14 @@
+# Control-plane deps — install these on the CPU workspace (ml.t3.medium) that
+# RUNS launch_gpu_job.py / launch_gpu_check.py. These are NOT installed in the
+# GPU container (that uses training/requirements.txt, auto-installed by SageMaker).
+#
+#   python -m pip install -r requirements-launch.txt
+#
+# The SageMaker Python SDK provides sagemaker.pytorch.PyTorch; boto3 is its AWS
+# client layer. botocore comes in transitively with boto3/sagemaker.
+#
+# MUST be SDK v2: v3.x (sagemaker>=3) is a rewrite that REMOVED the
+# `sagemaker.pytorch` module (split into sagemaker-core/-train/-serve/-mlops),
+# so `from sagemaker.pytorch import PyTorch` raises ModuleNotFoundError on v3.
+sagemaker>=2.200,<3
+boto3>=1.34
