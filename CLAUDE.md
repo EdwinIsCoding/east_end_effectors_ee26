@@ -55,7 +55,13 @@ python -c "import torch; print(torch.__version__, torch.cuda.is_available(), tor
 
 **✅ Bridge BUILT + dry-run PASS (2026-06-24).** XRoboToolkit PC Service installed via the `.deb` → `/opt/apps/roboticsservice` (SDK at `SDK/include/PXREARobotSDK.h` + `SDK/x64/libPXREARobotSDK.so`; the published deb is in `~/Downloads/`). Built with `CMAKE_PREFIX_PATH=$HOME/opt/libfranka-0.9.2` (default `XROBOTICS_SERVICE_ROOT` resolves). Binary `robot/franka_xr_teleop/build/cpp/teleop_bridge/franka_xr_teleop_bridge` links libfranka 0.9.2 + libPXREARobotSDK + yaml-cpp. `--dry-run --control-source policy` runs clean: policy action source on `udp://0.0.0.0:28082`, obs publisher up, no robot/motion. To install the deb yourself: `sudo apt install -y ~/Downloads/XRoboToolkit_PC_Service_1.0.0_ubuntu_22.04_amd64.deb`.
 
-**✅ Arm motion + homing GATE cleared (2026-06-24):** tiny-motion OK; new `move_to_home` tool drove the arm to `q_home=[0,-π/4,0,-3π/4,0,π/2,π/4]` (slow 6 s quintic). Build: `cmake -S robot/franka-sanity-checks -B …/build && cmake --build …/build` (CMAKE_PREFIX_PATH=libfranka-0.9.2), run `./build/move_to_home 192.168.1.11`. Motion prereq each time: user-stop released + FCI active + brakes unlocked; `self_collision_avoidance_violation` needs a manual hand-guide (auto-recovery rejected).
+**✅ Arm motion + homing GATE cleared (2026-06-24):** tiny-motion OK; new `move_to_home` tool drove the arm (slow 6 s quintic). Build: `cmake -S robot/franka-sanity-checks -B …/build && cmake --build …/build` (CMAKE_PREFIX_PATH=libfranka-0.9.2), run `./build/move_to_home 192.168.1.11`. Motion prereq each time: user-stop released + FCI active + brakes unlocked; `self_collision_avoidance_violation` needs a manual hand-guide (auto-recovery rejected).
+
+**🏠 Home pose (updated 2026-06-25 — hand-guided capture is now the DEFAULT home):** the default home everywhere is `q_home_current=[-0.368165,-0.164319,0.558745,-2.658920,-0.042354,2.962630,0.855225]` (captured by hand-guiding the arm and reading `q`). It lives in **two** places that are kept in sync:
+- `robot/franka_xr_teleop/configs/teleop.yaml` → `start_joint_positions_rad` — the **bridge B-button rehome** target during data collection (left-X discard rehomes here too). Read at bridge startup; no rebuild needed, just relaunch the bridge.
+- `robot/franka-sanity-checks/src/move_to_home.cpp` → `kHomeDefault` — the standalone `move_to_home` / `rehome.sh` target. **Rebuild** the `move_to_home` target after editing.
+
+The **classic** `q_home=[0,-π/4,0,-3π/4,0,π/2,π/4]` is preserved as the alternate "initial position": `./build/move_to_home <ip> [dur] --home legacy`, or via the shell wrapper `./rehome.sh [ip] [dur] --legacy`. Default (no flag) = the current hand-guided home. **To re-capture a new home:** hand-guide the arm, read `q` (`panda_libfranka_sanity --mode read-only`, FCI must be active), paste those 7 values into BOTH spots above, then rebuild `move_to_home`.
 **✅ Cameras at HD (2026-06-24):** both D405 stream 1280×720@30 over USB 3.2. Real serials (old contract placeholders were wrong): external `130322273529`→`third_person_d405`; wrist `130322270179`→`top` in configs. ⚠️ Unit `130322273880` is a **dead D405** (USB-2 only even on a known-good cable) — keep it retired; mount a working spare on the wrist and confirm its serial matches `data_collection.yaml`.
 
 **Still pending:**
@@ -91,7 +97,7 @@ Healthy log: `Gripper ready …`, `control_command_success_rate≈0.97-1`, `q_er
 ```bash
 cd robot/franka-sanity-checks
 ./build/panda_libfranka_sanity --robot-ip 192.168.1.11 --mode recover-only   # Reflex→Idle (automaticErrorRecovery)
-./build/move_to_home 192.168.1.11                                            # slow 6 s quintic to q_home
+./build/move_to_home 192.168.1.11                                            # slow 6 s quintic to current home (add --home legacy for classic q_home)
 ```
 - `"User stopped"` rejection → physical user-stop is pressed; release it, then recover again.
 - Homing itself trips `cartesian_reflex` mid-move with `cartesian_collision:[…,2,…]` + steady `O_F_ext_hat_K` Z (~5 N) → the **gripper is in contact** (table/plate/cable). Guiding is envelope-capped right at the contact so you can't hand-pull it free. Break contact with a commanded lift (base-frame +Z, away from a downward contact), then recover + home:
@@ -103,7 +109,9 @@ cd robot/franka-sanity-checks
 **🔁 Headset sleeps / "connect error" / timeout in the app:** taking the headset off drops the USB→ADB link, which kills the reverse tunnel — the bridge, service, and robot keep running. Fix is just: **wake/wear the headset, then redo steps 1–2** (`adb kill-server && adb start-server`; re-add `adb reverse tcp:63901 tcp:63901`) and reconnect the app to `127.0.0.1`. Do **not** restart the bridge or re-home.
 
 ## ✅ Data collection → LeRobot dataset (D2) — WORKING 2026-06-25
-Validated end-to-end on a 2-episode session. Full detail in memory `ee26-data-collection-workflow.md`.
+Validated end-to-end on a 2-episode session. **Operator playbook (20×20 cadence): `DATA_COLLECTION.md`** (repo
+root). Full detail in memory `ee26-data-collection-workflow.md`; recording format/layout in
+`robot/franka_xr_teleop/DATA_COLLECTION.md`.
 
 **Capture.** Bridge running (holds home; `--obs-port 28081`), then in `~/ee26_cam_venv`:
 ```bash
@@ -164,6 +172,7 @@ the VS Code snap XDG redirect that would dangle on updates. Recipe: `robot/frank
 | `training/src/inference/` | OpenVINO Pantherlake runner + README (Intel bonus) |
 | `training/configs/training/` | `smolvla_baseline.yaml`, `pi0_c1.yaml`, `pi0_subtask.yaml`, … |
 | `challenge2/` | ball-balance: tracker + PD + plate-tilt; `README.md` has the bring-up + `CommandSink` boundary |
+| `DATA_COLLECTION.md` (root) | operator playbook for the 20×20 collect→clean cadence (methodology) |
 | `CONTRACT.md` `plans/` `README.md` | frozen interface · per-machine plans · merge model |
 
 ## Conventions (apply on every machine)
@@ -214,6 +223,19 @@ cd training && python -m src.inference.openvino_runner --self-test
 - **Convert with `--primary-camera wrist_d405`** so wrist→`observation.images.top` — wrong value silently
   mismatches train/deploy image keys (see `CONTRACT.md §1`).
 - C2 commands a **Cartesian-pose** target (the teleop/pose path), NOT the joint policy port 28082.
+- **One camera consumer at a time.** The D405s are single-client: a stray `tools/live_camera_view.py`
+  (the dual-feed debug viewer) or a leftover recorder will make the next recorder die with
+  `xioctl(VIDIOC_S_FMT) failed, errno=16 Device or resource busy`. Before recording: `pkill -f live_camera_view`,
+  confirm `fuser /dev/video*` is empty.
+- **Hand-guiding needs FCI OFF.** While the bridge (any FCI client) is connected it owns the arm and Desk
+  guiding is locked out. To kinesthetically guide: stop the bridge, deactivate FCI in Desk, use the guiding
+  button. A "limited range" during guiding is a **Desk-side** config (guiding-mode DOF locks / workspace
+  walls / joint locks), NOT our collision thresholds (those only load with an FCI client attached).
+- **Rehome path to the current home can snag a cable.** The standalone `move_to_home` does a naive *direct*
+  joint interp; at the default 0.35 rad/s it can trip `cartesian_reflex` mid-path to the hand-guided home
+  (speed-sensitive → a cable, not the table). A slower duration clears it, and the bridge's B-rehome uses
+  the **safe lift-first route** (`MoveToSafeHomeRoute`) which clears it at full speed. The home pose itself is
+  contact-free (`O_F_ext_hat_K≈0` there).
 
 ## Reference clones (OFF-ROBOT / this Mac only — not in git)
 `~/Downloads/ee26_refs/`: `vla-teleop-franka-v2` (source of `robot/`), `SmolVLA-Testing` (source of `training/`; extra branches: feat/qwen-thomas, labeler, qwen-prompting, xav-qwen).

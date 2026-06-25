@@ -8,7 +8,12 @@
 //     -L$HOME/opt/libfranka-0.9.2/lib -lfranka -lpthread \
 //     -Wl,-rpath,$HOME/opt/libfranka-0.9.2/lib
 //
-// Usage: ./build/move_to_home <robot-ip> [duration_s=6.0]
+// Usage: ./build/move_to_home <robot-ip> [duration_s=6.0] [--home default|legacy]
+//   --home default  (the default) drives to the current EE26 home (kHomeDefault),
+//                   captured from a hand-guided pose and kept in sync with the
+//                   teleop bridge's start_joint_positions_rad in teleop.yaml.
+//   --home legacy   drives to the classic ready pose
+//                   q_home = [0, -pi/4, 0, -3pi/4, 0, pi/2, pi/4].
 
 #include <array>
 #include <cmath>
@@ -19,7 +24,14 @@
 #include <franka/robot.h>
 
 namespace {
-constexpr std::array<double, 7> kHome = {
+// Current EE26 home (default). Captured 2026-06-25 from a hand-guided pose and
+// kept in sync with teleop.yaml start_joint_positions_rad (bridge B-button home).
+constexpr std::array<double, 7> kHomeDefault = {
+    {-0.368165, -0.164319, 0.558745, -2.658920, -0.042354, 2.962630, 0.855225}};
+
+// Legacy ready pose: q_home = [0, -pi/4, 0, -3pi/4, 0, pi/2, pi/4]. Selectable
+// with `--home legacy`.
+constexpr std::array<double, 7> kHomeLegacy = {
     {0.0, -0.7853981633974483, 0.0, -2.356194490192345, 0.0, 1.5707963267948966,
      0.7853981633974483}};
 
@@ -39,15 +51,41 @@ double Quintic(double tau) {  // s(0)=0, s(1)=1, s'=s''=0 at ends
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    std::cerr << "Usage: " << argv[0] << " <robot-ip> [duration_s=6.0]\n";
+    std::cerr << "Usage: " << argv[0]
+              << " <robot-ip> [duration_s=6.0] [--home default|legacy]\n";
     return 1;
   }
   const std::string robot_ip = argv[1];
-  const double duration_s = (argc >= 3) ? std::stod(argv[2]) : 6.0;
+  double duration_s = 6.0;
+  std::array<double, 7> home = kHomeDefault;
+  std::string home_name = "default";
+  for (int i = 2; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--home") {
+      if (i + 1 >= argc) {
+        std::cerr << "Missing value for --home (expected default|legacy).\n";
+        return 1;
+      }
+      home_name = argv[++i];
+      if (home_name == "default") {
+        home = kHomeDefault;
+      } else if (home_name == "legacy") {
+        home = kHomeLegacy;
+      } else {
+        std::cerr << "Unknown --home value '" << home_name
+                  << "' (expected default|legacy).\n";
+        return 1;
+      }
+    } else {
+      // Positional: duration in seconds.
+      duration_s = std::stod(arg);
+    }
+  }
   if (duration_s < 2.0) {
     std::cerr << "Refusing duration < 2 s (too fast for a supervised home move).\n";
     return 1;
   }
+  std::cout << "Home target: " << home_name << "\n";
 
   try {
     franka::Robot robot(robot_ip);
@@ -74,7 +112,7 @@ int main(int argc, char** argv) {
     const franka::RobotState initial = robot.readOnce();
     const std::array<double, 7> q_start = initial.q;
 
-    std::array<double, 7> q_goal = kHome;
+    std::array<double, 7> q_goal = home;
     double max_delta = 0.0;
     for (size_t i = 0; i < 7; ++i) {
       if (q_goal[i] < kQMin[i] || q_goal[i] > kQMax[i]) {
