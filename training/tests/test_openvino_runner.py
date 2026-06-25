@@ -35,10 +35,18 @@ def test_clamp_rejects_bad_shape_and_nan():
         ovr.clamp_action(np.array([np.nan, *np.zeros(7)]))
 
 
-def test_state_vector_is_q_plus_gripper_width():
-    state = ovr.state_vector({"q": [0, 1, 2, 3, 4, 5, 6], "gripper_width": 0.076})
+def test_state_vector_reads_nested_robot_state():
+    # Real bridge wire: q/gripper_width nested under "robot_state" (observation_pub.cpp).
+    obs = {"robot_state": {"q": [0, 1, 2, 3, 4, 5, 6], "gripper_width": 0.076}, "status": {}}
+    state = ovr.state_vector(obs)
     np.testing.assert_allclose(state, np.array([0, 1, 2, 3, 4, 5, 6, 0.076], dtype=np.float32))
     assert state.shape == (ovr.POLICY_STATE_DIM,)
+
+
+def test_state_vector_flat_fallback():
+    # Synthetic/test obs may be flat; still supported.
+    state = ovr.state_vector({"q": [0, 1, 2, 3, 4, 5, 6], "gripper_width": 0.076})
+    np.testing.assert_allclose(state, np.array([0, 1, 2, 3, 4, 5, 6, 0.076], dtype=np.float32))
 
 
 def test_mock_policy_holds_current_joints():

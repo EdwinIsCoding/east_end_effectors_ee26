@@ -139,12 +139,17 @@ class ActionSender:
 
 
 # --- Observation sources ----------------------------------------------------
-def state_vector(robot_state: dict[str, Any]) -> np.ndarray:
-    """[q0..q6, gripper_width] — mirrors run_vla_policy._robot_state_vector."""
-    q = robot_state.get("q", [])
+def state_vector(obs: dict[str, Any]) -> np.ndarray:
+    """[q0..q6, gripper_width] from a bridge obs — mirrors run_vla_policy._robot_state_vector.
+
+    The bridge nests these under "robot_state" (observation_pub.cpp emits {"robot_state":{"q":..,
+    "gripper_width":..}}). Read that; fall back to a flat dict so synthetic/test obs still work.
+    """
+    rs = obs.get("robot_state", obs)
+    q = rs.get("q", [])
     if len(q) != 7:
         raise ValueError("robot_state.q must contain 7 joints")
-    return np.asarray([*map(float, q), float(robot_state.get("gripper_width", 0.0))], dtype=np.float32)
+    return np.asarray([*map(float, q), float(rs.get("gripper_width", 0.0))], dtype=np.float32)
 
 
 class UdpStateListener:
@@ -334,7 +339,8 @@ def _self_test() -> int:
 
     sender = ActionSender("127.0.0.1", port)
     policy = MockPolicy()
-    hold_state = {"q": [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785], "gripper_width": 0.04}
+    hold_state = {"robot_state": {"q": [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785],
+                                  "gripper_width": 0.04}}
     fake_img = np.zeros((720, 1280, 3), dtype=np.uint8)
     n = run_loop(lambda: hold_state, lambda: {WRIST_IMAGE_KEY: fake_img, EXTERNAL_IMAGE_KEY: fake_img},
                  policy, sender, "Insert the peg into the hole.", rate_hz=200.0, jitter_std=0.0,
@@ -398,7 +404,8 @@ def main() -> int:
     policy = MockPolicy() if args.mock else PhysicalAIPolicy(args.model, device=args.device)
 
     if args.mock:
-        hold = {"q": [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785], "gripper_width": 0.04}
+        hold = {"robot_state": {"q": [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785],
+                                "gripper_width": 0.04}}
         fake = np.zeros((720, 1280, 3), dtype=np.uint8)
         state_source = lambda: hold
         image_source = lambda: {WRIST_IMAGE_KEY: fake, EXTERNAL_IMAGE_KEY: fake}
