@@ -46,3 +46,41 @@ python -m src.inference.openvino_runner --model ./exports/c1_smolvla_ov \
 - `--jitter-std` adds controlled Gaussian joint jitter (report's mm-precision insertion trick); default 0.
 - Safety mirrors the bridge: joints clamped to Panda limits ±0.02 rad, gripper binarized at 0.5.
 - Same runner shape works for the C2 ball tracker if you export that model to OpenVINO (also earns the bonus).
+
+## Optimization & benchmarking (`bench_openvino.py`)
+
+The deploy must hold the control rate (30 Hz), so single-inference latency has to fit the loop budget
+(camera read + inference + UDP send). Two tools measure and improve that:
+
+**1. Loop-level latency — on the runner itself**
+```bash
+python -m src.inference.openvino_runner --model ./exports/c1_smolvla_ov \
+    --bridge-ip <black-ws> --device GPU --profile --report-every 100
+```
+Prints p50/p95/p99 for each stage (state/image/**infer**/send) and the effective Hz. `infer` is the
+term OpenVINO optimization moves; this is the on-hardware proof that the loop holds rate.
+
+**2. Model-level sweep — `bench_openvino.py`**
+```bash
+# real export on Pantherlake: sweep iGPU + NPU + CPU, require 30 Hz, write a report
+python -m src.inference.bench_openvino --model ./exports/c1_smolvla_ov/openvino_model.xml \
+    --devices GPU,NPU,CPU --target-hz 30 --fold-preprocess --cache-dir .ovcache --json bench.json
+
+# no model yet? a synthetic vision+state proxy validates the whole pipeline anywhere:
+python -m src.inference.bench_openvino --self-test
+python -m src.inference.bench_openvino --devices CPU --iters 300
+```
+Optimization knobs it applies/compares:
+- **`PERFORMANCE_HINT=LATENCY`** — tune for one-shot latency, not batch throughput (always on).
+- **`CACHE_DIR`** (`--cache-dir`) — cache the compiled model; cuts cold-start compile on relaunch.
+- **NNCF INT8 PTQ** (`--int8`, default on) — quantize the graph; usually the biggest CPU/NPU win.
+- **Preprocess folding** (`--fold-preprocess`) — push `u8 NHWC → f32 NCHW + /255` *into* the graph, so
+  the deploy loop hands the model the raw D405 frame and does zero per-step numpy.
+
+Pick the lowest-latency device/precision whose **p95** still clears `--target-hz`, then deploy the
+runner with that `--device` (and quantized export if INT8 wins).
+
+> The synthetic proxy produces real numbers but is **not** the policy — use it to validate the
+> optimize→quantize→measure pipeline. Re-measure on Pantherlake with the real export before trusting
+> latency figures. Requires `pip install openvino nncf` (lazy-imported, so `--self-test`/imports work
+> without them; CI skips the heavy tests).
