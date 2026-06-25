@@ -89,6 +89,8 @@ def _add_clean_parser(sub: argparse._SubParsersAction) -> None:
                    help="Min cartesian_delta_rotation norm considered movement (default: %(default)s).")
     p.add_argument("--generate-tasks", action="store_true",
                    help="Auto-assign a task prompt to each kept episode and write annotations.jsonl.")
+    p.add_argument("--drop-episodes", type=str, default=None,
+                   help="Comma-separated 0-based raw episode indices to drop (match episodes/episode_NNN).")
     p.set_defaults(func=_cmd_clean)
 
 
@@ -98,9 +100,13 @@ def _cmd_clean(args: argparse.Namespace) -> None:
     if not dataset_dir.exists():
         raise FileNotFoundError(f"Dataset '{args.dataset_name}' not found at {dataset_dir}")
     output_dir = args.output_root / args.dataset_name
+    drop_episodes = {
+        int(tok) for tok in (args.drop_episodes or "").replace(" ", "").split(",") if tok
+    }
     DatasetCleaner(
         dataset_dir=dataset_dir,
         output_dir=output_dir,
+        drop_episodes=drop_episodes,
         camera_tolerance_ns=int(args.camera_tolerance_ms * 1_000_000.0),
         force_overwrite=args.force,
         max_episodes=args.max_episodes,

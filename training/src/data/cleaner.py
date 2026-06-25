@@ -67,6 +67,7 @@ class DatasetCleaner:
         action_rotation_threshold: float = DEFAULT_ACTION_ROTATION_THRESHOLD,
         min_episode_duration_s: float = DEFAULT_MIN_EPISODE_DURATION_S,
         generate_tasks: bool = False,
+        drop_episodes: set[int] | None = None,
     ) -> None:
         self.dataset_dir = dataset_dir
         self.output_dir = output_dir
@@ -79,6 +80,8 @@ class DatasetCleaner:
         self.action_rotation_threshold = float(action_rotation_threshold)
         self.min_episode_duration_s = float(min_episode_duration_s)
         self.generate_tasks = generate_tasks
+        # 0-based raw segment indices to drop (match episodes/episode_NNN order).
+        self.drop_episodes = set(drop_episodes or ())
 
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         LOGGER.info("Device: %s", self._device)
@@ -222,6 +225,9 @@ class DatasetCleaner:
         skipped_static = skipped_no_coverage = skipped_too_short = 0
 
         for raw_index, (start_idx, end_idx) in enumerate(boundaries):
+            if raw_index in self.drop_episodes:
+                LOGGER.info("Segment %d: dropped via --drop-episodes.", raw_index)
+                continue
             robot_slice = self.robot_rows[start_idx:end_idx]
             if not robot_slice:
                 continue
