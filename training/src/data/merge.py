@@ -447,11 +447,16 @@ def merge(source_roots: list[Path], output_root: Path, force: bool) -> Path:
     if global_task_to_idx:
         task_indices = list(range(len(global_task_to_idx)))
         task_strings = [task for task, _ in sorted(global_task_to_idx.items(), key=lambda x: x[1])]
-        tasks_table = pa.table({
-            "task_index": pa.array(task_indices, type=pa.int64()),
-            "task": pa.array(task_strings, type=pa.string()),
-        })
-        pq.write_table(tasks_table, output_root / "meta" / "tasks.parquet")
+        # LeRobot v3 expects the task STRING as the pandas index (named "task")
+        # with a "task_index" column, matching how the source datasets store it.
+        # Writing plain pyarrow columns drops the pandas index metadata, so the
+        # dataset's task_index->string lookup returns the integer index instead
+        # of the task text — which then breaks the SmolVLA tokenizer.
+        import pandas as pd
+        tasks_df = pd.DataFrame(
+            {"task": task_strings, "task_index": task_indices}
+        ).set_index("task")
+        tasks_df.to_parquet(output_root / "meta" / "tasks.parquet")
 
     # -------------------------------------------------------------------------
     # Write info.json
