@@ -120,16 +120,17 @@ save; with nothing recording, A/B episodes are lost.
 | Stage | Path | What |
 |---|---|---|
 | raw session | `robot/franka_xr_teleop/recordings/<id>/` | `robot.jsonl` (continuous; per row: `timestamp_ns`, `robot_state{q[7],q_cmd,dq,gripper_width,gripper_state,tcp_*}`, `executed_action`, `commanded/desired_target_state`, `status`), `episode_events.jsonl` (A/B markers = the episode definition), `cameras/<name>/{rgb.mp4,frames.jsonl}`, `episodes/episode_NNN/` (per-episode split for QA), `episodes_index.json` |
-| cleaned | `training/cleaned_datasets/<id>/` | motion-trimmed `robot.jsonl`, regenerated `episode_events.jsonl`, `annotations.jsonl` (per-episode task), camera symlinks |
-| LeRobot v3 | `training/lerobot_datasets/<id>/` | `data/*.parquet` (`observation.state[8]`, `action[8]`, indices), `videos/observation.images.{top,third_person_d405}/.../*.mp4`, `meta/{info,stats,tasks,episodes}`. `meta/episodes` parquet has `episode_index, length, tasks, dataset_from_index, dataset_to_index`. Train-ready. |
+| cleaned | `robot/franka_xr_teleop/recordings_cc/cleaned/<id>/` | motion-trimmed `robot.jsonl`, regenerated `episode_events.jsonl`, `annotations.jsonl` (per-episode task), camera symlinks. (Manual `main.py` runs default to `training/cleaned_datasets/`.) |
+| LeRobot v3 | `robot/franka_xr_teleop/recordings_cc/lerobot/<id>/` | `data/*.parquet` (`observation.state[8]`, `action[8]`, indices), `videos/observation.images.{top,third_person_d405}/.../*.mp4`, `meta/{info,stats,tasks,episodes}`. `meta/episodes` parquet has `episode_index, length, tasks, dataset_from_index, dataset_to_index`. Train-ready. (Manual `main.py convert` defaults to `training/lerobot_datasets/`.) |
 
-**Convert a batch** (CPU-only — runs on the RT boot during collection):
+**Convert a batch — one command** (CPU-only; safe to run in the BACKGROUND while the next batch records):
 ```bash
-source lerobot/.venv/bin/activate && cd training
-python main.py clean    <id> --datasets-root ../robot/franka_xr_teleop/recordings --force
-python main.py annotate <id> --overwrite
-python main.py convert  <id> --primary-camera wrist_d405 --force   # wrist → observation.images.top
+cd robot/franka_xr_teleop
+nohup ./tools/process_recording.sh <session_id> > recordings_cc/<session_id>.process.log 2>&1 &
 ```
+Writes `recordings_cc/cleaned/<id>/` + `recordings_cc/lerobot/<id>/` (train-ready). It just orchestrates
+`main.py clean → annotate → convert --primary-camera wrist_d405` against the lerobot venv; pass extra
+flags through (e.g. `--keep-blank-episodes`) or run the three `main.py` steps by hand for one-offs.
 
 **Drop a bad episode — do it BEFORE convert** (removing one from LeRobot v3 is painful: it re-indexes
 parquet + concatenated videos + stats):
@@ -153,7 +154,7 @@ the VS Code snap XDG redirect that would dangle on updates. Recipe: `robot/frank
 ## Repo map
 | Path | What |
 |---|---|
-| `robot/franka_xr_teleop/` | libfranka bridge (C++), teleop, recorders, `tools/record_data_collection_session.py` + `tools/split_session_episodes.py` (data collection), `tools/run_vla_policy.py` deploy; `DATA_COLLECTION.md` |
+| `robot/franka_xr_teleop/` | libfranka bridge (C++), teleop, recorders, `tools/record_data_collection_session.py` + `tools/split_session_episodes.py` + `tools/process_recording.sh` (record → split → clean+convert), `tools/run_vla_policy.py` deploy; `DATA_COLLECTION.md` |
 | `robot/franka-sanity-checks/` | gripper / safe-translate hardware checks |
 | `training/` | SmolVLA-Testing pipeline (clean/annotate/convert/train/eval); `main.py` CLI |
 | `training/TASK_C1.md` | turn-key C1 record→…→train recipe (run on Desktop) |

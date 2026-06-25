@@ -42,6 +42,7 @@ cleaned_datasets/
 lerobot_datasets/
 raw_recordings/
 recordings/
+recordings_cc/
 *.mp4
 *.bag
 
