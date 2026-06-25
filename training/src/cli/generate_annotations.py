@@ -18,57 +18,22 @@ from src.data.utils import read_jsonl, save_annotation
 
 _DEFAULT_CLEANED_ROOT = Path(__file__).resolve().parents[2] / "cleaned_datasets"
 
-# (verb, preposition) pairs — only grammatically valid combinations are listed.
-# EE26 Challenge 1 = peg-in-hole insertion with 3D-printed shapes.
-# "Insert/Push/Slide X into Y", "Fit/Seat X in/into Y", "Place/Lower X into Y", etc.
-# NOTE: refine _OBJECTS/_RECEPTACLES with the actual printed shape's colour/name once known.
-_VERB_PREP_PAIRS = [
-    ("Insert", "into"),
-    ("Insert", "in"),
-    ("Push", "into"),
-    ("Slide", "into"),
-    ("Fit", "into"),
-    ("Fit", "in"),
-    ("Seat", "in"),
-    ("Place", "in"),
-    ("Place", "into"),
-    ("Lower", "into"),
-]
-
-_OBJECTS = [
-    "the peg",
-    "the printed peg",
-    "the cylinder",
-    "the block",
-    "the part",
-]
-
-_RECEPTACLES = [
-    "the hole",
-    "the slot",
-    "the socket",
-    "the opening",
-    "the matching hole",
+# EE26 Challenge 1 = peg-in-hole insertion. Use a FIXED set of 4 paraphrases, cycled across
+# episodes — do NOT generate a unique prompt per episode. The policy deploys with one canonical
+# phrasing and benefits from a small, consistent paraphrase set. "white" is intentionally dropped:
+# the peg and socket are both white and flat lighting kills the separating shadow, so naming the
+# colour over-anchors the policy on a cue that isn't reliable at deploy.
+_PROMPTS = [
+    "Put the peg into the socket.",
+    "Fit the cylindrical block into the hole.",
+    "Insert the cylindrical block into the socket.",
+    "Place the cylindrical block into the matching hole.",
 ]
 
 
 def generate_prompts(num_episodes: int) -> list[str]:
-    all_prompts = [
-        f"{v} {o} {p} {r}."
-        for v, p in _VERB_PREP_PAIRS
-        for o in _OBJECTS
-        for r in _RECEPTACLES
-    ]
-
-    if num_episodes > len(all_prompts):
-        raise ValueError(
-            f"Requested {num_episodes} prompts but only {len(all_prompts)} unique "
-            "combinations exist. Add more synonym entries."
-        )
-
-    rng = random.Random(42)
-    rng.shuffle(all_prompts)
-    return all_prompts[:num_episodes]
+    """Return num_episodes prompts, cycling the fixed 4 paraphrases (no multiplication)."""
+    return [_PROMPTS[i % len(_PROMPTS)] for i in range(num_episodes)]
 
 
 def count_episodes(dataset_dir: Path) -> int:
