@@ -272,6 +272,12 @@ def test_rtc_path(
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--policy-path", type=Path, required=True)
+    parser.add_argument(
+        "--policy-type",
+        default="smolvla",
+        choices=["smolvla", "pi0"],
+        help="LeRobot policy class to load (flow-matching, RTC-compatible).",
+    )
     parser.add_argument("--lerobot-root", type=Path, default=None)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--sync-steps", type=int, default=5)
@@ -310,22 +316,27 @@ def main():
                     sys.path.insert(0, str(candidate))
                 break
 
-    from lerobot.policies.smolvla import SmolVLAPolicy
     from lerobot.policies import make_pre_post_processors
+
+    if args.policy_type == "pi0":
+        from lerobot.policies.pi0 import PI0Policy as PolicyClass
+    else:
+        from lerobot.policies.smolvla import SmolVLAPolicy as PolicyClass
 
     device = torch.device(args.device)
     policy_path = str(resolve_policy_path(args.policy_path))
 
-    print(f"Loading SmolVLA from {policy_path} on {device}...")
-    policy = SmolVLAPolicy.from_pretrained(policy_path)
+    print(f"Loading {args.policy_type} from {policy_path} on {device}...")
+    policy = PolicyClass.from_pretrained(policy_path)
     policy.to(device)
     policy.eval()
 
-    print(f"  chunk_size={policy.config.chunk_size}")
-    print(f"  n_action_steps={policy.config.n_action_steps}")
-    print(f"  max_action_dim={policy.config.max_action_dim}")
-    print(f"  max_state_dim={policy.config.max_state_dim}")
-    print(f"  num_steps (flow matching)={policy.config.num_steps}")
+    cfg = policy.config
+    print(f"  chunk_size={getattr(cfg, 'chunk_size', '?')}")
+    print(f"  n_action_steps={getattr(cfg, 'n_action_steps', '?')}")
+    print(f"  max_action_dim={getattr(cfg, 'max_action_dim', '?')}")
+    print(f"  max_state_dim={getattr(cfg, 'max_state_dim', '?')}")
+    print(f"  num_steps (flow matching)={getattr(cfg, 'num_steps', '?')}")
     print(f"  input_features: {list(policy.config.input_features.keys())}")
     print(f"  output_features: {list(policy.config.output_features.keys())}")
 
