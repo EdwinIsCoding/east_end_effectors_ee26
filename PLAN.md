@@ -101,6 +101,66 @@ triangle, circle, pentagon (likely square/hexagon too). Reliable classical solut
 - Pure classical does NOT earn the Intel/OpenVINO bonus — it's the reliable floor; C2's tracker is the cheap bonus.
 - Phone photos ≠ D405 frames → re-tune perception on real D405 stills (grab a few; minimal robot time).
 
+## Points-optimization plan (maximize score) — ranked by points-per-effort
+
+**Scoring levers (what actually earns points):** (1) C1 insertion success, (2) C2 ball-balance base,
+(3) C2 bonus = balance across **4 TCP poses**, (4) **Intel bonus** = OpenVINO inference on Pantherlake
+(earnable on C1 *and/or* C2). Reliability on the day > cleverness. **Do BOTH challenges** — C2 is
+independent and classical-friendly; leaving it on the table is the biggest avoidable loss.
+
+**Open decisions to resolve first (ask organizer / Edwin):**
+- [ ] **Intel bonus: once or per-challenge?** (Decides whether A4 is worth it.)
+- [ ] **Scoring basis:** per-challenge success-rate vs single best attempt vs demo-judged? (Decides reliability vs generality emphasis.)
+- [ ] **Compliance control for C1/C2** (A1a spike below) — the single highest C1 risk.
+
+### A1 — Lock C1 classical hybrid to near-perfect  ·  DESKTOP  ·  highest guaranteed points
+Follow `robot/docs/C1_DESKTOP_RUNBOOK.md` to ≥9/10 per shape. Built on `robot/c1_vision/` (done).
+- [ ] **A1a SPIKE (do first, time-boxed):** pick the compliant-insertion controller. Options, by readiness:
+      (i) **multipanda_ros2 subscriber Cartesian-impedance controller** — ready-made, exactly what the brief
+      recommends, MuJoCo sim parity for safe gain tuning; cost = stand up multipanda alongside the bridge.
+      (ii) own ~100-line libfranka Cartesian-impedance torque controller (full control, must tune on HW).
+      (iii) stiff bridge + chamfer + spiral search (fastest, least robust). **Recommend (i) for C1/C2 contact.**
+- [ ] extrinsics (≤3 mm touch-validated) → perception on live D405 → pick → align yaw → compliant insert + spiral on `O_F_ext`.
+- [ ] **Gate:** ≥9/10 per shape on ≥2 shapes, failure modes logged.
+
+### A2 — Lock C2 ball-balance (base + 4-pose bonus)  ·  DESKTOP + off-robot logic  ·  big independent points
+`challenge2/` PD stack is built+tested off-robot. Wire it to hardware.
+- [ ] **A2a base:** implement `CommandSink` → the Cartesian-pose/impedance command (same controller as A1a);
+      D405 overhead ball tracker → PD → plate tilt. Sign-calibrate (`tilt_to_pose(signs=…)`). **Gate: ball held centred.**
+- [ ] **A2b bonus:** feed-forward a smooth low-accel trajectory through **4 TCP poses**; PD rejects drift. **Gate: balanced across all 4.**
+
+### A3 — Intel bonus via C1 VLA on Pantherlake  ·  DESKTOP + off-robot + Intel  ·  bonus + C1 generality
+Tooling exists (`openvino_runner.py`, `start_policy_deploy.sh`, `bench_openvino.py`, `c1_insertion` policy).
+- [ ] finish SmolVLA training on good data (A5) → `policy.export(backend="openvino")` via physical-ai-studio.
+- [ ] run `InferenceModel` on **Pantherlake** → UDP 28082 → bridge. **Verify obs-dict/action shapes on the Intel box** (the flagged unknown in `build_policy_obs`).
+- [ ] **Gate:** a learned policy drives the arm with inference on Pantherlake (Intel bonus demonstrated).
+
+### A4 — Intel bonus via C2 OpenVINO ball tracker  ·  off-robot model + Intel  ·  ONLY if bonus is per-challenge
+- [ ] train a tiny learned ball detector (small CNN / keypoint) → OpenVINO → Pantherlake feeding the PD loop.
+      Cheap second bonus instance; skip if Intel bonus is one-time.
+
+### A5 — C1 VLA data quality (feeds A3)  ·  DESKTOP + off-robot
+The VLA score/bonus is data-bound. Diversity > volume; fixed 4-paraphrase prompts (done).
+- [ ] collect ≥40–60 **diverse** insertion demos (approach angle, start pose, placement); good camera placement (wrist + overhead).
+- [ ] clean → annotate (4 prompts) → convert (`--primary-camera wrist_d405`) → train. Iterate on eval feedback.
+
+### A6 — Hybrid C1 (learned coarse + classical insert)  ·  ceiling, best C1 reliability
+Combine A1 (compliant insert, last cm) with A3 (VLA/vision coarse alignment) — the brief's hybrid. Highest C1 ceiling + keeps the Intel bonus.
+
+### A7 — Reliability hardening + demo polish  ·  points on the day
+- [ ] rehearse `error_recovery` between trials; loosen collision thresholds deliberately + revert.
+- [ ] success-rate runs with logged failure modes; a **fallback** (classical floor if VLA falters).
+- [ ] live monitoring via `robot/operator_console/`; rehearse the scored run end-to-end.
+
+### A8 — Sim-assisted tuning (multipanda MuJoCo)  ·  de-risks A1/A2
+- [ ] if A1a picks an impedance controller, tune gains + fast C2 trajectories in **MuJoCo first** (sim/real parity) to avoid crashing the arm.
+
+### Recommended parallelization
+- **DESKTOP (robot):** A1 (C1 classical) → A2 (C2) → A5 data → A3 deploy. A7 throughout.
+- **OFF-ROBOT (laptop):** A4 tracker model, A5 training orchestration, A3 OpenVINO export/bench, c1_vision refinement on real stills, A8 sim.
+- **Intel box:** A3/A4 OpenVINO inference.
+- **Sequencing:** secure floors (A1+A2) before chasing ceilings (A3/A6). Grab the cheapest Intel bonus that the rules allow.
+
 ## Open items
 - [ ] **(Off-robot)** Build + test `robot/c1_vision/` perception (shape ID + yaw) on the example photos; refine on D405 stills.
 - [ ] **(Desktop)** C1 extrinsics calibration + depth back-projection + pick→align→insert→verify on the bridge.
