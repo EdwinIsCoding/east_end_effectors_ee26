@@ -59,6 +59,17 @@ def train_pi0(
     if str(lerobot_src) not in sys.path:
         sys.path.insert(0, str(lerobot_src))
 
+    # Compat shim: the published lerobot/pi0_base processor config is newer than our pinned
+    # lerobot and references the action step under its renamed registry key
+    # 'relative_actions_processor'. Our pinned commit registers the same class
+    # (RelativeActionsProcessorStep) only under the old key 'delta_actions_processor'.
+    # Alias the new key to that class so from_pretrained can resolve the step.
+    from lerobot.processor.pipeline import ProcessorStepRegistry
+    from lerobot.processor.relative_action_processor import RelativeActionsProcessorStep
+    ProcessorStepRegistry._registry.setdefault(
+        "relative_actions_processor", RelativeActionsProcessorStep
+    )
+
     if os.getenv("HF_HUB_OFFLINE") == "1":
         import lerobot.datasets.lerobot_dataset as lerobot_dataset
         import lerobot.datasets.utils as dataset_utils
