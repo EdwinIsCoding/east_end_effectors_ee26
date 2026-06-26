@@ -73,6 +73,14 @@ def test_detect_scene_finds_socket_and_peg():
     assert scene["socket"].yaw_deg is not None
 
 
+def test_peg_has_grasp_axis_for_pickup():
+    img = np.full((640, 640, 3), RED_BGR, np.uint8)
+    cv2.fillPoly(img, [reg_poly(320, 320, 80, 5, 0.0)], WHITE)   # solid white peg
+    scene = d.detect_scene(img)
+    assert scene["peg"] is not None
+    assert scene["peg"].grasp_axis_deg is not None               # gripper orientation available regardless of shape
+
+
 def test_backproject_identity_and_offset():
     K = np.array([[600.0, 0, 320.0], [0, 600.0, 240.0], [0, 0, 1.0]])
     T = np.eye(4)

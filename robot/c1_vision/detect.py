@@ -27,6 +27,7 @@ class Detection:
     n_sides: int                   # 0 for circle
     area_px: float
     quality: float                 # 0..1 (solidity * fill)
+    grasp_axis_deg: Optional[float] = None  # minAreaRect angle: parallel-jaw grasp orientation (sign calibrated on HW)
     polygon: np.ndarray = field(default_factory=lambda: np.empty((0, 2)))
 
 
@@ -107,10 +108,11 @@ def _detection_from_contour(role, bgr, contour) -> Detection:
     M = cv2.moments(contour)
     cx = M["m10"] / M["m00"] if M["m00"] else float(poly[:, 0].mean())
     cy = M["m01"] / M["m00"] if M["m00"] else float(poly[:, 1].mean())
+    (_, _), (_, _), rect_angle = cv2.minAreaRect(contour)
     return Detection(role=role, shape=shape, center_px=(float(cx), float(cy)),
                      yaw_deg=estimate_yaw(poly, n), n_sides=max(n, 0),
                      area_px=float(cv2.contourArea(contour)), quality=round(_solidity(contour), 3),
-                     polygon=poly)
+                     grasp_axis_deg=float(rect_angle), polygon=poly)
 
 
 def detect_scene(bgr: np.ndarray, min_area_px: int = 1500) -> dict:
