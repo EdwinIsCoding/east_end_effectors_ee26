@@ -33,6 +33,14 @@ cd challenge2 && python -m pytest tests -q   # uses the off-robot venv
 ```
 
 ## Intel bonus
-Swap the classical tracker for a learned ball detector exported to **OpenVINO** on Pantherlake
-(keep the `BallObservation` interface). Mind the camera→control latency budget; the loop is only as
-fast as perception.
+**Built:** a learned ball detector (`src/ball_net.py`) — tiny conv backbone + **soft-argmax** head →
+`[x, y, present]`; trained on domain-randomized synthetic frames (~3 px synthetic error vs ~24 px
+center-baseline). Exported to ONNX (`models/ball_net.onnx`) and run via **OpenVINO** (Pantherlake) or
+onnxruntime through `src/ball_tracker_nn.NNBallTracker` — a **drop-in for `ColorBlobTracker`** (same
+`BallObservation`), so it slots into `loop.run(...)` unchanged and earns the Intel bonus.
+```bash
+python train_ball_net.py --steps 1000 --out models/ball_net.onnx   # retrain / fine-tune
+# on Pantherlake: NNBallTracker("models/ball_net.onnx") auto-selects OpenVINO + device
+```
+Synthetic-trained → **fine-tune on a few real plate frames** for best accuracy (swap `synth_batch` for a
+real-frame loader). Mind the camera→control latency budget; the loop is only as fast as perception.

@@ -64,6 +64,10 @@ def test_nn_tracker_is_dropin_for_colorblob(tmp_path):
     frame = (np.transpose(x[0], (1, 2, 0)) * 255).astype(np.uint8)   # HWC uint8 RGB
     obs = NNBallTracker(onnx_path).detect(frame)
     assert isinstance(obs, BallObservation)
+
+    ort_tracker = NNBallTracker(onnx_path, backend="onnxruntime")   # explicit fallback path
+    assert ort_tracker.backend == "onnxruntime"
+    assert isinstance(ort_tracker.detect(frame), BallObservation)
     if y[0, 2] == 1.0:
         assert obs.found
         err = np.hypot(obs.u - y[0, 0] * bn.INPUT_SIZE, obs.v - y[0, 1] * bn.INPUT_SIZE)
