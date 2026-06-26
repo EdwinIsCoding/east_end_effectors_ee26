@@ -1,0 +1,7 @@
+# Lint config for the Challenge-2 ball-balance package.
+line-length = 120
+target-version = "py310"
+
+[lint]
+# E702: compact "a; b; c" training-step lines are intentional and readable here.
+ignore = ["E702"]

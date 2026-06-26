@@ -50,3 +50,11 @@ recordings_cc/
 .env
 *.local
 CREDENTIALS.md
+
+# Coverage / test artifacts
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+*.onnx

@@ -7,7 +7,6 @@ OpenVINO points — keep the BallObservation interface and swap the implementati
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 
